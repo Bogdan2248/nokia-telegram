@@ -47,17 +47,16 @@ jobs:
 
         # Зеркала для midpapi20.jar
         URLS_MIDP=(
+          "https://repo1.maven.org/maven2/org/microemu/midp-api/2.0.4/midp-api-2.0.4.jar"
+          "https://repo.maven.apache.org/maven2/org/microemu/midp-api/2.0.4/midp-api-2.0.4.jar"
           "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/midpapi20.jar"
-          "https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/midpapi20.jar"
-          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/midpapi20.jar"
-          "https://sourceforge.net/projects/microemu/files/microemu/2.0.4/microemulator-2.0.4.zip/download"
         )
 
         # Зеркала для cldcapi11.jar
         URLS_CLDC=(
+          "https://repo1.maven.org/maven2/org/microemu/cldc-api/2.0.4/cldc-api-2.0.4.jar"
+          "https://repo.maven.apache.org/maven2/org/microemu/cldc-api/2.0.4/cldc-api-2.0.4.jar"
           "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/cldcapi11.jar"
-          "https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/cldcapi11.jar"
-          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/cldcapi11.jar"
         )
 
         if ! download_with_retry "lib/midpapi20.jar" "${URLS_MIDP[@]}"; then
