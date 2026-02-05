@@ -21,38 +21,48 @@ jobs:
     - name: Get Libraries
       run: |
         mkdir -p lib
-        # Функция для скачивания с проверкой
+        # Функция для скачивания с проверкой на 404 и HTML-ответ
         download_lib() {
           local file=$1
           local url=$2
           echo "Downloading $file from $url..."
-          curl -L -o "lib/$file" "$url"
-          # Проверяем, что это валидный zip/jar (минимум 10кб)
-          if [ $(stat -c%s "lib/$file") -lt 10000 ]; then
-            return 1
+          # Используем -f чтобы curl падал при 404, и -L для редиректов
+          if curl -L -f -o "lib/$file" "$url"; then
+            # Проверяем, не скачали ли мы HTML вместо JAR
+            if grep -q "<!DOCTYPE html" "lib/$file" || grep -q "<html" "lib/$file"; then
+              echo "Error: $url returned HTML instead of JAR"
+              rm "lib/$file"
+              return 1
+            fi
+            # Проверяем минимальный размер (JAR должен быть > 50kb)
+            local size=$(stat -c%s "lib/$file")
+            if [ $size -lt 50000 ]; then
+              echo "Error: $file is too small ($size bytes), probably invalid"
+              rm "lib/$file"
+              return 1
+            fi
+            echo "Successfully downloaded $file ($size bytes)"
+            return 0
           fi
-          unzip -t "lib/$file" > /dev/null 2>&1
-          return $?
+          return 1
         }
 
-        # Список источников для midpapi20.jar
+        # Прямые ссылки (RAW) на проверенные репозитории
         URLS_MIDP=(
-          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/midpapi20.jar"
-          "https://github.com/nikita36078/J2ME-libs/raw/master/midpapi20.jar"
-          "https://github.com/grvsh6/J2ME-Development/raw/master/lib/midpapi20.jar"
+          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/midpapi20.jar"
+          "https://raw.githubusercontent.com/gtrxAC/discord-j2me/main/sdk/lib/midpapi20.jar"
+          "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/midpapi20.jar"
         )
 
-        # Список источников для cldcapi11.jar
         URLS_CLDC=(
-          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/cldcapi11.jar"
-          "https://github.com/nikita36078/J2ME-libs/raw/master/cldcapi11.jar"
-          "https://github.com/grvsh6/J2ME-Development/raw/master/lib/cldcapi11.jar"
+          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/cldcapi11.jar"
+          "https://raw.githubusercontent.com/gtrxAC/discord-j2me/main/sdk/lib/cldcapi11.jar"
+          "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/cldcapi11.jar"
         )
 
         SUCCESS_MIDP=false
         for url in "${URLS_MIDP[@]}"; do
           if download_lib "midpapi20.jar" "$url"; then
-            echo "Successfully downloaded midpapi20.jar"
             SUCCESS_MIDP=true
             break
           fi
@@ -61,14 +71,13 @@ jobs:
         SUCCESS_CLDC=false
         for url in "${URLS_CLDC[@]}"; do
           if download_lib "cldcapi11.jar" "$url"; then
-            echo "Successfully downloaded cldcapi11.jar"
             SUCCESS_CLDC=true
             break
           fi
         done
 
         if [ "$SUCCESS_MIDP" = false ] || [ "$SUCCESS_CLDC" = false ]; then
-          echo "Failed to download valid J2ME libraries!"
+          echo "FATAL: Failed to download valid J2ME libraries from all sources!"
           exit 1
         fi
         ls -l lib/
