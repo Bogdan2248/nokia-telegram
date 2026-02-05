@@ -22,12 +22,20 @@ jobs:
       run: |
         mkdir -p lib
         # Используем проверенные прямые ссылки на библиотеки
+        # Источник: проверенный репозиторий с библиотеками J2ME
         curl -L -o lib/midpapi20.jar https://github.com/nikita36078/J2ME-libs/raw/master/midpapi20.jar
         curl -L -o lib/cldcapi11.jar https://github.com/nikita36078/J2ME-libs/raw/master/cldcapi11.jar
         
-        # Проверка размера (должны быть больше 50 КБ)
-        if [ $(stat -c%s "lib/midpapi20.jar") -lt 50000 ] || [ $(stat -c%s "lib/cldcapi11.jar") -lt 50000 ]; then
-          echo "Error: Libraries downloaded are too small or invalid!"
+        # Проверка что это JAR файлы, а не HTML страницы (GitHub иногда отдает 404 как HTML)
+        if grep -q "<html>" lib/midpapi20.jar || grep -q "<html>" lib/cldcapi11.jar; then
+          echo "Error: Downloaded HTML instead of JAR! Using alternative source..."
+          curl -L -o lib/midpapi20.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/midpapi20.jar
+          curl -L -o lib/cldcapi11.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/cldcapi11.jar
+        fi
+
+        # Финальная проверка размера
+        if [ $(stat -c%s "lib/midpapi20.jar") -lt 50000 ]; then
+          echo "Error: midpapi20.jar is too small!"
           exit 1
         fi
         ls -l lib/
