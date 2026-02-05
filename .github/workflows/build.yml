@@ -21,54 +21,13 @@ jobs:
     - name: Get Libraries
       run: |
         mkdir -p lib
-        # Функция для скачивания с проверкой
-        download_lib() {
-          local file=$1
-          local url=$2
-          echo "Downloading $file from $url..."
-          curl -L -o "lib/$file" "$url"
-          # Проверяем, что это валидный zip/jar (минимум 10кб)
-          if [ $(stat -c%s "lib/$file") -lt 10000 ]; then
-            return 1
-          fi
-          unzip -t "lib/$file" > /dev/null 2>&1
-          return $?
-        }
-
-        # Список источников для midpapi20.jar
-        URLS_MIDP=(
-          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/midpapi20.jar"
-          "https://github.com/nikita36078/J2ME-libs/raw/master/midpapi20.jar"
-          "https://github.com/grvsh6/J2ME-Development/raw/master/lib/midpapi20.jar"
-        )
-
-        # Список источников для cldcapi11.jar
-        URLS_CLDC=(
-          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/cldcapi11.jar"
-          "https://github.com/nikita36078/J2ME-libs/raw/master/cldcapi11.jar"
-          "https://github.com/grvsh6/J2ME-Development/raw/master/lib/cldcapi11.jar"
-        )
-
-        SUCCESS_MIDP=false
-        for url in "${URLS_MIDP[@]}"; do
-          if download_lib "midpapi20.jar" "$url"; then
-            echo "Successfully downloaded midpapi20.jar"
-            SUCCESS_MIDP=true
-            break
-          fi
-        done
-
-        SUCCESS_CLDC=false
-        for url in "${URLS_CLDC[@]}"; do
-          if download_lib "cldcapi11.jar" "$url"; then
-            echo "Successfully downloaded cldcapi11.jar"
-            SUCCESS_CLDC=true
-            break
-          fi
-        done
-
-        if [ "$SUCCESS_MIDP" = false ] || [ "$SUCCESS_CLDC" = false ]; then
-          echo "Failed to download valid J2ME libraries!"
+        # Используем проверенные прямые ссылки на библиотеки
+        curl -L -o lib/midpapi20.jar https://github.com/nikita36078/J2ME-libs/raw/master/midpapi20.jar
+        curl -L -o lib/cldcapi11.jar https://github.com/nikita36078/J2ME-libs/raw/master/cldcapi11.jar
+        
+        # Проверка размера (должны быть больше 50 КБ)
+        if [ $(stat -c%s "lib/midpapi20.jar") -lt 50000 ] || [ $(stat -c%s "lib/cldcapi11.jar") -lt 50000 ]; then
+          echo "Error: Libraries downloaded are too small or invalid!"
           exit 1
         fi
         ls -l lib/
