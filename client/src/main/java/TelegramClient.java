@@ -59,6 +59,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         messageForm.addCommand(sendMsgCmd);
         messageForm.addCommand(reactCmd);
         messageForm.addCommand(backCmd);
+        messageForm.addCommand(exitCmd);
         messageForm.setCommandListener(this);
     }
 
@@ -217,7 +218,11 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             idx = res.indexOf("}", idx);
         }
         messageForm.append(replyField);
-        if (display.getCurrent() != messageForm) display.setCurrent(messageForm);
+        // Only switch display if we are already on messageForm or it's a fresh load
+        Displayable current = display.getCurrent();
+        if (current != messageForm && current != reactionEmojiList) {
+            display.setCurrent(messageForm);
+        }
     }
 
     private void sendMessage() {
