@@ -21,54 +21,56 @@ jobs:
     - name: Get Libraries
       run: |
         mkdir -p lib
-        # Функция для скачивания с перебором зеркал и проверкой сигнатуры JAR (PK)
-        download_with_retry() {
-          local output=$1
-          shift
-          local urls=("$@")
-          
-          for url in "${urls[@]}"; do
-            echo "Trying to download $output from $url..."
-            if curl -L -f -s -o "$output" "$url"; then
-              # Проверка сигнатуры ZIP/JAR (первые два байта должны быть PK)
-              if [ "$(head -c 2 "$output")" = "PK" ]; then
-                echo "Successfully downloaded valid JAR: $output"
-                return 0
-              else
-                echo "Warning: $url returned invalid file (not a JAR). Skipping..."
-                rm -f "$output"
-              fi
-            else
-              echo "Warning: Failed to download from $url (HTTP error)."
-            fi
-          done
-          return 1
+        # Функция для скачивания с проверкой
+        download_lib() {
+          local file=$1
+          local url=$2
+          echo "Downloading $file from $url..."
+          curl -L -o "lib/$file" "$url"
+          # Проверяем, что это валидный zip/jar (минимум 10кб)
+          if [ $(stat -c%s "lib/$file") -lt 10000 ]; then
+            return 1
+          fi
+          unzip -t "lib/$file" > /dev/null 2>&1
+          return $?
         }
 
-        # Зеркала для midpapi20.jar
+        # Список источников для midpapi20.jar
         URLS_MIDP=(
-          "https://repo1.maven.org/maven2/org/microemu/midp-api/2.0.4/midp-api-2.0.4.jar"
-          "https://repo.maven.apache.org/maven2/org/microemu/midp-api/2.0.4/midp-api-2.0.4.jar"
-          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/midpapi20.jar"
+          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/midpapi20.jar"
+          "https://github.com/nikita36078/J2ME-libs/raw/master/midpapi20.jar"
+          "https://github.com/grvsh6/J2ME-Development/raw/master/lib/midpapi20.jar"
         )
 
-        # Зеркала для cldcapi11.jar
+        # Список источников для cldcapi11.jar
         URLS_CLDC=(
-          "https://repo1.maven.org/maven2/org/microemu/cldc-api/2.0.4/cldc-api-2.0.4.jar"
-          "https://repo.maven.apache.org/maven2/org/microemu/cldc-api/2.0.4/cldc-api-2.0.4.jar"
-          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/cldcapi11.jar"
+          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/cldcapi11.jar"
+          "https://github.com/nikita36078/J2ME-libs/raw/master/cldcapi11.jar"
+          "https://github.com/grvsh6/J2ME-Development/raw/master/lib/cldcapi11.jar"
         )
 
-        if ! download_with_retry "lib/midpapi20.jar" "${URLS_MIDP[@]}"; then
-          echo "FATAL: Could not download midpapi20.jar from any source!"
-          exit 1
-        fi
+        SUCCESS_MIDP=false
+        for url in "${URLS_MIDP[@]}"; do
+          if download_lib "midpapi20.jar" "$url"; then
+            echo "Successfully downloaded midpapi20.jar"
+            SUCCESS_MIDP=true
+            break
+          fi
+        done
 
-        if ! download_with_retry "lib/cldcapi11.jar" "${URLS_CLDC[@]}"; then
-          echo "FATAL: Could not download cldcapi11.jar from any source!"
+        SUCCESS_CLDC=false
+        for url in "${URLS_CLDC[@]}"; do
+          if download_lib "cldcapi11.jar" "$url"; then
+            echo "Successfully downloaded cldcapi11.jar"
+            SUCCESS_CLDC=true
+            break
+          fi
+        done
+
+        if [ "$SUCCESS_MIDP" = false ] || [ "$SUCCESS_CLDC" = false ]; then
+          echo "Failed to download valid J2ME libraries!"
           exit 1
         fi
-        
         ls -l lib/
 
     - name: Build
