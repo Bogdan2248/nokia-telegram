@@ -21,22 +21,26 @@ jobs:
     - name: Get Libraries
       run: |
         mkdir -p lib
-        # Используем проверенные прямые ссылки на библиотеки
-        # Источник: проверенный репозиторий с библиотеками J2ME
-        curl -L -o lib/midpapi20.jar https://github.com/nikita36078/J2ME-libs/raw/master/midpapi20.jar
-        curl -L -o lib/cldcapi11.jar https://github.com/nikita36078/J2ME-libs/raw/master/cldcapi11.jar
+        # Используем максимально надежные прямые ссылки на JAR файлы
+        # Эти ссылки ведут на RAW контент, GitHub не должен отдавать HTML
+        curl -L -f -o lib/midpapi20.jar https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/midpapi20.jar
+        curl -L -f -o lib/cldcapi11.jar https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/cldcapi11.jar
         
-        # Проверка что это JAR файлы, а не HTML страницы (GitHub иногда отдает 404 как HTML)
-        if grep -q "<html>" lib/midpapi20.jar || grep -q "<html>" lib/cldcapi11.jar; then
-          echo "Error: Downloaded HTML instead of JAR! Using alternative source..."
-          curl -L -o lib/midpapi20.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/midpapi20.jar
-          curl -L -o lib/cldcapi11.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/cldcapi11.jar
+        # Проверка на корректность JAR (должен начинаться с 'PK')
+        if [ "$(head -c 2 lib/midpapi20.jar)" != "PK" ]; then
+          echo "Error: midpapi20.jar is not a valid ZIP/JAR file! Falling back to alternative..."
+          curl -L -f -o lib/midpapi20.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/midpapi20.jar
+        fi
+        
+        if [ "$(head -c 2 lib/cldcapi11.jar)" != "PK" ]; then
+          echo "Error: cldcapi11.jar is not a valid ZIP/JAR file! Falling back to alternative..."
+          curl -L -f -o lib/cldcapi11.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/cldcapi11.jar
         fi
 
-        # Финальная проверка размера
-        if [ $(stat -c%s "lib/midpapi20.jar") -lt 50000 ]; then
-          echo "Error: midpapi20.jar is too small!"
-          exit 1
+        # Финальная проверка заголовков еще раз
+        if [ "$(head -c 2 lib/midpapi20.jar)" != "PK" ] || [ "$(head -c 2 lib/cldcapi11.jar)" != "PK" ]; then
+           echo "FATAL: Both sources failed to provide valid JAR files."
+           exit 1
         fi
         ls -l lib/
 
