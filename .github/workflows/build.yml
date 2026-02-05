@@ -21,27 +21,55 @@ jobs:
     - name: Get Libraries
       run: |
         mkdir -p lib
-        # Используем максимально надежные прямые ссылки на JAR файлы
-        # Эти ссылки ведут на RAW контент, GitHub не должен отдавать HTML
-        curl -L -f -o lib/midpapi20.jar https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/midpapi20.jar
-        curl -L -f -o lib/cldcapi11.jar https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/cldcapi11.jar
-        
-        # Проверка на корректность JAR (должен начинаться с 'PK')
-        if [ "$(head -c 2 lib/midpapi20.jar)" != "PK" ]; then
-          echo "Error: midpapi20.jar is not a valid ZIP/JAR file! Falling back to alternative..."
-          curl -L -f -o lib/midpapi20.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/midpapi20.jar
-        fi
-        
-        if [ "$(head -c 2 lib/cldcapi11.jar)" != "PK" ]; then
-          echo "Error: cldcapi11.jar is not a valid ZIP/JAR file! Falling back to alternative..."
-          curl -L -f -o lib/cldcapi11.jar https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/cldcapi11.jar
+        # Функция для скачивания с перебором зеркал и проверкой сигнатуры JAR (PK)
+        download_with_retry() {
+          local output=$1
+          shift
+          local urls=("$@")
+          
+          for url in "${urls[@]}"; do
+            echo "Trying to download $output from $url..."
+            if curl -L -f -s -o "$output" "$url"; then
+              # Проверка сигнатуры ZIP/JAR (первые два байта должны быть PK)
+              if [ "$(head -c 2 "$output")" = "PK" ]; then
+                echo "Successfully downloaded valid JAR: $output"
+                return 0
+              else
+                echo "Warning: $url returned invalid file (not a JAR). Skipping..."
+                rm -f "$output"
+              fi
+            else
+              echo "Warning: Failed to download from $url (HTTP error)."
+            fi
+          done
+          return 1
+        }
+
+        # Зеркала для midpapi20.jar
+        URLS_MIDP=(
+          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/midpapi20.jar"
+          "https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/midpapi20.jar"
+          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/midpapi20.jar"
+          "https://sourceforge.net/projects/microemu/files/microemu/2.0.4/microemulator-2.0.4.zip/download"
+        )
+
+        # Зеркала для cldcapi11.jar
+        URLS_CLDC=(
+          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/cldcapi11.jar"
+          "https://raw.githubusercontent.com/grvsh6/J2ME-Development/master/lib/cldcapi11.jar"
+          "https://github.com/the-m-project/j2me-sdk/raw/master/lib/cldcapi11.jar"
+        )
+
+        if ! download_with_retry "lib/midpapi20.jar" "${URLS_MIDP[@]}"; then
+          echo "FATAL: Could not download midpapi20.jar from any source!"
+          exit 1
         fi
 
-        # Финальная проверка заголовков еще раз
-        if [ "$(head -c 2 lib/midpapi20.jar)" != "PK" ] || [ "$(head -c 2 lib/cldcapi11.jar)" != "PK" ]; then
-           echo "FATAL: Both sources failed to provide valid JAR files."
-           exit 1
+        if ! download_with_retry "lib/cldcapi11.jar" "${URLS_CLDC[@]}"; then
+          echo "FATAL: Could not download cldcapi11.jar from any source!"
+          exit 1
         fi
+        
         ls -l lib/
 
     - name: Build
