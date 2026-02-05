@@ -1,0 +1,11 @@
+.venv/
+.idea/
+__pycache__/
+*.class
+*.jar
+*.pyc
+classes/
+dist/
+build/
+bin/
+lib/
