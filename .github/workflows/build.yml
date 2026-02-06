@@ -68,7 +68,6 @@ jobs:
     - name: Package 
       run: | 
         mkdir -p META-INF 
-        # Создаем чистый манифест, чтобы точно не было ошибок 
         cat <<EOT > META-INF/MANIFEST.MF 
         MIDlet-Name: Telegram 
         MIDlet-Version: 1.0.0 
@@ -77,11 +76,15 @@ jobs:
         MicroEdition-Profile: MIDP-2.0 
         MicroEdition-Configuration: CLDC-1.1 
         EOT 
+        echo "Contents of classes directory:" 
+        ls -R classes 
         jar cvfm TelegramClient.jar META-INF/MANIFEST.MF -C classes . 
-        ls -l TelegramClient.jar 
+        echo "Current directory contents:" 
+        ls -l 
   
     - name: Upload 
       uses: actions/upload-artifact@v4 
       with: 
         name: TelegramClient-JAR 
-        path: ./*.jar
+        path: "*.jar" 
+        if-no-files-found: error
