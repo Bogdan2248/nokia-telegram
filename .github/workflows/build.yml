@@ -45,7 +45,9 @@ jobs:
         ) 
         URLS_FOMA=(
           "https://github.com/vzhivov/foma/raw/master/lib/foma-jsr075.jar"
+          "https://github.com/microemu/microemu/raw/master/microedition-file/src/main/resources/jsr75.jar"
           "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/jsr75.jar"
+          "https://web.archive.org/web/2021/https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/jsr75.jar"
         )
         for url in "${URLS_MIDP[@]}"; do download_lib "midpapi20.jar" "$url" && break; done 
         for url in "${URLS_CLDC[@]}"; do download_lib "cldcapi11.jar" "$url" && break; done 
