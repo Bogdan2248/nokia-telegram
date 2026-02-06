@@ -78,9 +78,10 @@ jobs:
         MicroEdition-Configuration: CLDC-1.1 
         EOT 
         jar cvfm TelegramClient.jar META-INF/MANIFEST.MF -C classes . 
+        ls -l TelegramClient.jar 
   
     - name: Upload 
       uses: actions/upload-artifact@v4 
       with: 
         name: TelegramClient-JAR 
-        path: TelegramClient.jar
+        path: ./*.jar
