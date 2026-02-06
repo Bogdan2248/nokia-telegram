@@ -76,7 +76,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     public void run() {
         while (isAutoRefreshRunning) {
             try {
-                Thread.sleep(15000); // Автообновление каждые 15 сек
+                Thread.sleep(5000); // Автообновление каждые 5 сек
                 if (display.getCurrent() == messageForm) {
                     loadMessages(currentChatId);
                 } else if (display.getCurrent() == chatList) {

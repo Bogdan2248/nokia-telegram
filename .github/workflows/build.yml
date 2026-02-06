@@ -88,7 +88,6 @@ EOF
           ls -l TelegramClient.jar
         else
           echo "ERROR: TelegramClient.jar NOT FOUND!"
-          find . -name "*.jar"
           exit 1
         fi
   
