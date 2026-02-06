@@ -21,14 +21,11 @@ jobs:
     - name: Get Libraries 
       run: | 
         mkdir -p lib 
-         
-        # Функция для скачивания с жесткой проверкой 
         download_lib() { 
           local file=$1 
           local url=$2 
           echo "Trying $url..." 
           curl -L -f -o "lib/$file" "$url" 
-          # Проверяем, что это не HTML страница (404) и файл открывается как zip 
           if unzip -t "lib/$file" > /dev/null 2>&1; then 
             echo "Successfully downloaded valid $file" 
             return 0 
@@ -38,21 +35,16 @@ jobs:
             return 1 
           fi 
         } 
-  
-        # Ссылки на Maven Central (самые стабильные) + резерв 
         URLS_MIDP=( 
           "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" 
           "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/midpapi20.jar" 
         ) 
-         
         URLS_CLDC=( 
           "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" 
           "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/cldcapi11.jar" 
         ) 
-  
         for url in "${URLS_MIDP[@]}"; do download_lib "midpapi20.jar" "$url" && break; done 
         for url in "${URLS_CLDC[@]}"; do download_lib "cldcapi11.jar" "$url" && break; done 
-  
         if [ ! -f "lib/midpapi20.jar" ] || [ ! -f "lib/cldcapi11.jar" ]; then 
           echo "ERROR: Could not download J2ME libraries!" 
           exit 1 
@@ -67,7 +59,6 @@ jobs:
   
     - name: Package 
       run: | 
-        # Создаем манифест
         mkdir -p classes/META-INF 
         cat > classes/META-INF/MANIFEST.MF <<EOF
 MIDlet-Name: Telegram
@@ -77,17 +68,13 @@ MIDlet-1: Telegram, , TelegramClient
 MicroEdition-Profile: MIDP-2.0
 MicroEdition-Configuration: CLDC-1.1
 EOF
-        # Собираем JAR
         cd classes
         jar cvfm ../TelegramClient.jar META-INF/MANIFEST.MF .
         cd ..
-        
-        # Проверка и отладка
         if [ -f "TelegramClient.jar" ]; then
           echo "SUCCESS: TelegramClient.jar created."
-          ls -l TelegramClient.jar
         else
-          echo "ERROR: TelegramClient.jar NOT FOUND!"
+          echo "ERROR: JAR NOT FOUND!"
           exit 1
         fi
   

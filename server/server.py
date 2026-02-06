@@ -65,10 +65,34 @@ async def get_messages():
         sender = await m.get_sender()
         sender_name = getattr(sender, 'first_name', 'System') or "System"
         
+        text = m.text or ""
+        
+        # Обработка медиа-сообщений
+        if m.media:
+            from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument, MessageMediaGeo, MessageMediaContact
+            if isinstance(m.media, MessageMediaPhoto):
+                if not text: text = "[Фотография]"
+            elif m.video_note: # Кружок
+                text = "[Кружок (Video Note)]" + (" " + text if text else "")
+            elif m.voice: # Голосовое
+                text = "[Голосовое сообщение]" + (" " + text if text else "")
+            elif m.video: # Видео файл
+                text = "[Видео]" + (" " + text if text else "")
+            elif m.audio: # Музыка
+                text = "[Аудио]" + (" " + text if text else "")
+            elif isinstance(m.media, MessageMediaDocument):
+                text = "[Файл: " + (m.file.name or "document") + "]" + (" " + text if text else "")
+            elif isinstance(m.media, MessageMediaGeo):
+                text = "[Локация]"
+            elif isinstance(m.media, MessageMediaContact):
+                text = "[Контакт: " + m.media.first_name + "]"
+            else:
+                if not text: text = "[Медиа сообщение]"
+
         msg_data = {
             "id": m.id,
             "from": sender_name,
-            "text": m.text or "",
+            "text": text,
             "has_photo": 1 if isinstance(m.media, MessageMediaPhoto) else 0,
             "reactions": ""
         }
