@@ -103,8 +103,11 @@ async def get_messages():
         messages = await c.get_messages(chat_id, limit=20)
         result = []
         for m in messages:
-            sender = await m.get_sender()
-            sender_name = getattr(sender, 'first_name', 'System') or "System"
+            if m.out:
+                sender_name = "Me"
+            else:
+                sender = await m.get_sender()
+                sender_name = getattr(sender, 'first_name', 'System') or "System"
             text = m.text or ""
             
             if m.media:

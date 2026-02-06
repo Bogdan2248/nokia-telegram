@@ -20,10 +20,10 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     public TelegramClient() {
         display = Display.getDisplay(this);
         
-        authForm = new Form("Telegram Auth");
-        phoneField = new TextField("Phone (+7...)", "+", 20, TextField.PHONENUMBER);
-        codeField = new TextField("Code", "", 10, TextField.NUMERIC);
-        serverField = new TextField("Server URL", "http://", 200, TextField.URL);
+        authForm = new Form("Telegram Login");
+        phoneField = new TextField("Phone Number:", "+", 20, TextField.PHONENUMBER);
+        codeField = new TextField("Auth Code:", "", 10, TextField.NUMERIC);
+        serverField = new TextField("Server URL:", "http://", 500, TextField.URL);
         
         loadSettings();
 
@@ -34,23 +34,26 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         exitCmd = new Command("Exit", Command.EXIT, 4);
         Command settingsCmd = new Command("Settings", Command.SCREEN, 5);
         
+        authForm.append(new StringItem(null, "--- Connection ---"));
+        authForm.append(serverField);
+        authForm.append(new StringItem(null, "--- Authentication ---"));
         authForm.append(phoneField);
         authForm.append(codeField);
-        authForm.append(serverField);
+        
         authForm.addCommand(sendCodeCmd);
         authForm.addCommand(loginCmd);
         authForm.addCommand(refreshChatsCmd);
         authForm.addCommand(exitCmd);
         authForm.setCommandListener(this);
 
-        chatList = new List("Chats", List.IMPLICIT);
+        chatList = new List("My Telegram Chats", List.IMPLICIT);
         chatList.addCommand(refreshChatsCmd);
         chatList.addCommand(settingsCmd);
         chatList.addCommand(exitCmd);
         chatList.setCommandListener(this);
 
-        messageForm = new Form("Messages");
-        replyField = new TextField("Reply", "", 100, TextField.ANY);
+        messageForm = new Form("Chat");
+        replyField = new TextField("Message:", "", 1000, TextField.ANY);
         sendMsgCmd = new Command("Send", Command.OK, 1);
         messageForm.addCommand(sendMsgCmd);
         messageForm.addCommand(backCmd);
@@ -326,15 +329,17 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                     try { lastMsgId = Long.parseLong(msgIdStr); } catch (Exception e) {}
                 }
 
+                String prefix = from.equals("Me") ? "> " : "";
                 if ("1".equals(hasPhotoStr)) {
-                    messageForm.append(new StringItem(from + ": ", displayMsg + " [Photo]"));
+                    messageForm.append(new StringItem(null, prefix + from + ": " + displayMsg + " [Photo]"));
                     try {
                         Image img = loadHttpImage(getBaseUrl() + "/photo?chat_id=" + chatId + "&msg_id=" + msgIdStr);
                         if (img != null) messageForm.append(new ImageItem(null, img, ImageItem.LAYOUT_CENTER, "Photo"));
                     } catch (Exception e) {}
                 } else {
-                    messageForm.append(new StringItem(from + ": ", displayMsg));
+                    messageForm.append(new StringItem(null, prefix + from + ": " + displayMsg));
                 }
+                messageForm.append(new StringItem(null, "--------------------"));
 
                 int nextObj = res.indexOf("}", fromPos);
                 if (nextObj == -1) break;
