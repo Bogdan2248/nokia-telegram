@@ -179,19 +179,9 @@ async def send_message():
         chat_id = int(request.args.get('id'))
         text = request.args.get('text')
         
-        # Декодируем %uXXXX если пришло в таком формате
-        if text and "%u" in text:
-            import urllib.parse
-            # Заменяем %uXXXX на \uXXXX для корректного декодирования
-            parts = text.split('%u')
-            new_text = parts[0]
-            for p in parts[1:]:
-                if len(p) >= 4:
-                    hex_val = p[:4]
-                    new_text += chr(int(hex_val, 16)) + p[4:]
-                else:
-                    new_text += "%u" + p
-            text = new_text
+        # Теперь используем стандартный unquote, так как клиент шлет UTF-8
+        import urllib.parse
+        text = urllib.parse.unquote(text)
 
         print(f"[>>>] Sending message to {chat_id}: {text}")
         c = await get_client()

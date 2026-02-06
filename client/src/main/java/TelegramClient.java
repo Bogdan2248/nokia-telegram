@@ -76,11 +76,12 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     public void run() {
         while (isAutoRefreshRunning) {
             try {
-                Thread.sleep(5000); // Автообновление каждые 5 сек
+                Thread.sleep(10000); // Автообновление каждые 10 сек (было 5)
                 if (display.getCurrent() == messageForm) {
                     loadMessages(currentChatId);
                 } else if (display.getCurrent() == chatList) {
-                    loadChats();
+                    // Список чатов обновляем реже, только если он пустой или по команде
+                    if (chatList.size() == 0) loadChats();
                 }
             } catch (Exception e) {}
         }
@@ -344,20 +345,26 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     private String urlEncode(String s) {
         if (s == null) return "";
         StringBuffer sb = new StringBuffer();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '*') {
+        try {
+            byte[] utf8 = s.getBytes("UTF-8");
+            for (int i = 0; i < utf8.length; i++) {
+                int b = utf8[i] & 0xFF;
+                if ((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '-' || b == '_' || b == '.' || b == '*') {
+                    sb.append((char) b);
+                } else if (b == ' ') {
+                    sb.append("+");
+                } else {
+                    sb.append("%");
+                    String hex = Integer.toHexString(b);
+                    if (hex.length() == 1) sb.append("0");
+                    sb.append(hex.toUpperCase());
+                }
+            }
+        } catch (Exception e) {
+            // Fallback если UTF-8 не поддерживается (хотя в CLDC 1.1 должен быть)
+            for (int i = 0; i < s.length(); i++) {
+                char c = s.charAt(i);
                 sb.append(c);
-            } else if (c == ' ') {
-                sb.append("+");
-            } else if (c >= 0x0400 && c <= 0x04FF) { // Кириллица
-                String hex = Integer.toHexString(c);
-                // Для кириллицы в URL обычно нужно UTF-8, но простейший вариант для сервера:
-                sb.append("%u0" + hex.toUpperCase());
-            } else {
-                String hex = Integer.toHexString(c);
-                if (hex.length() == 1) sb.append("%0" + hex.toUpperCase());
-                else sb.append("%" + hex.toUpperCase());
             }
         }
         return sb.toString();
