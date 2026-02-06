@@ -27,6 +27,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         refreshChatsCmd = new Command("Refresh", Command.SCREEN, 3);
         backCmd = new Command("Back", Command.BACK, 1);
         exitCmd = new Command("Exit", Command.EXIT, 4);
+        Command settingsCmd = new Command("Settings", Command.SCREEN, 5);
         
         authForm.append(phoneField);
         authForm.append(codeField);
@@ -39,7 +40,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
 
         chatList = new List("Chats", List.IMPL_SET);
         chatList.addCommand(refreshChatsCmd);
-        chatList.addCommand(backCmd);
+        chatList.addCommand(settingsCmd);
         chatList.addCommand(exitCmd);
         chatList.setCommandListener(this);
 
@@ -59,6 +60,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         messageForm.addCommand(sendMsgCmd);
         messageForm.addCommand(reactCmd);
         messageForm.addCommand(backCmd);
+        messageForm.addCommand(settingsCmd);
         messageForm.addCommand(exitCmd);
         messageForm.setCommandListener(this);
     }
@@ -103,11 +105,15 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             } else {
                 new Thread() { public void run() { loadChats(); } }.start();
             }
+        } else if (c.getLabel().equals("Settings")) {
+            display.setCurrent(authForm);
         } else if (c == backCmd) {
             if (d == reactionEmojiList) {
                 display.setCurrent(messageForm);
-            } else {
+            } else if (d == messageForm) {
                 display.setCurrent(chatList);
+            } else {
+                display.setCurrent(authForm);
             }
         } else if (c == reactCmd) {
             display.setCurrent(reactionEmojiList);
