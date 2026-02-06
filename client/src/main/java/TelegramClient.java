@@ -177,6 +177,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                     if (nameEnd == -1) { idx = idEnd; continue; }
                     
                     String name = res.substring(nameStart, nameEnd);
+                    name = decodeUnicode(name);
                     chatList.append(name + " [" + id + "]", null);
                     idx = nameEnd;
                 }
@@ -194,6 +195,30 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         }
     }
 
+    private String decodeUnicode(String s) {
+        if (s == null || s.indexOf("\\u") == -1) return s;
+        StringBuffer sb = new StringBuffer();
+        int idx = 0;
+        while (idx < s.length()) {
+            char c = s.charAt(idx);
+            if (c == '\\' && idx + 5 < s.length() && s.charAt(idx + 1) == 'u') {
+                try {
+                    String hex = s.substring(idx + 2, idx + 6);
+                    int code = Integer.parseInt(hex, 16);
+                    sb.append((char) code);
+                    idx += 6;
+                } catch (Exception e) {
+                    sb.append(c);
+                    idx++;
+                }
+            } else {
+                sb.append(c);
+                idx++;
+            }
+        }
+        return sb.toString();
+    }
+
     private void loadMessages(long chatId) {
         String res = httpGet(getBaseUrl() + "/messages?id=" + chatId);
         if (res == null || res.length() == 0 || res.startsWith("Error")) {
@@ -208,14 +233,14 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 int fromStart = idx + 8;
                 int fromEnd = res.indexOf("\"", fromStart);
                 if (fromEnd == -1) break;
-                String from = res.substring(fromStart, fromEnd);
+                String from = decodeUnicode(res.substring(fromStart, fromEnd));
                 
                 int replyIdx = res.indexOf("\"reply_to\":\"", idx);
                 if (replyIdx != -1 && replyIdx < res.indexOf("}", idx)) {
                     int rStart = replyIdx + 12;
                     int rEnd = res.indexOf("\"", rStart);
                     if (rEnd != -1) {
-                        String rText = res.substring(rStart, rEnd);
+                        String rText = decodeUnicode(res.substring(rStart, rEnd));
                         messageForm.append(new StringItem(null, " > Re: " + rText + "\n"));
                     }
                 }
@@ -225,7 +250,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 int textStart = textLabel + 8;
                 int textEnd = res.indexOf("\"", textStart);
                 if (textEnd == -1) { idx = res.indexOf("}", idx); continue; }
-                String text = res.substring(textStart, textEnd);
+                String text = decodeUnicode(res.substring(textStart, textEnd));
                 
                 int photoIdx = res.indexOf("\"has_photo\":1", idx);
                 String msgId = "0";
