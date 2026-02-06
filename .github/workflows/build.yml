@@ -67,24 +67,34 @@ jobs:
   
     - name: Package 
       run: | 
-        mkdir -p META-INF 
-        cat <<EOT > META-INF/MANIFEST.MF 
-        MIDlet-Name: Telegram 
-        MIDlet-Version: 1.0.0 
-        MIDlet-Vendor: Trae 
-        MIDlet-1: Telegram, , TelegramClient 
-        MicroEdition-Profile: MIDP-2.0 
-        MicroEdition-Configuration: CLDC-1.1 
-        EOT 
-        echo "Contents of classes directory:" 
-        ls -R classes 
-        jar cvfm TelegramClient.jar META-INF/MANIFEST.MF -C classes . 
-        echo "Current directory contents:" 
-        ls -l 
+        # Создаем манифест
+        mkdir -p classes/META-INF 
+        cat > classes/META-INF/MANIFEST.MF <<EOF
+MIDlet-Name: Telegram
+MIDlet-Version: 1.0.0
+MIDlet-Vendor: Trae
+MIDlet-1: Telegram, , TelegramClient
+MicroEdition-Profile: MIDP-2.0
+MicroEdition-Configuration: CLDC-1.1
+EOF
+        # Собираем JAR
+        cd classes
+        jar cvfm ../TelegramClient.jar META-INF/MANIFEST.MF .
+        cd ..
+        
+        # Проверка и отладка
+        if [ -f "TelegramClient.jar" ]; then
+          echo "SUCCESS: TelegramClient.jar created."
+          ls -l TelegramClient.jar
+        else
+          echo "ERROR: TelegramClient.jar NOT FOUND!"
+          find . -name "*.jar"
+          exit 1
+        fi
   
     - name: Upload 
       uses: actions/upload-artifact@v4 
       with: 
         name: TelegramClient-JAR 
-        path: "*.jar" 
+        path: TelegramClient.jar 
         if-no-files-found: error
