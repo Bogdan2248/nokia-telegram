@@ -38,13 +38,13 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         authForm.addCommand(exitCmd);
         authForm.setCommandListener(this);
 
-        chatList = new List("Chats", List.IMPL_SET);
+        chatList = new List("Chats", List.IMPLICIT);
         chatList.addCommand(refreshChatsCmd);
         chatList.addCommand(settingsCmd);
         chatList.addCommand(exitCmd);
         chatList.setCommandListener(this);
 
-        reactionEmojiList = new List("React with...", List.IMPL_SET);
+        reactionEmojiList = new List("React with...", List.IMPLICIT);
         reactionEmojiList.append("👍", null);
         reactionEmojiList.append("❤️", null);
         reactionEmojiList.append("🔥", null);
