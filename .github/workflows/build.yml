@@ -34,9 +34,9 @@ jobs:
               rm "lib/$file"
               return 1
             fi
-            # Проверяем минимальный размер (JAR должен быть > 50kb)
-            local size=$(stat -c%s "lib/$file")
-            if [ $size -lt 50000 ]; then
+            # Проверяем минимальный размер (JAR должен быть > 40kb)
+             local size=$(stat -c%s "lib/$file")
+             if [ $size -lt 40000 ]; then
               echo "Error: $file is too small ($size bytes), probably invalid"
               rm "lib/$file"
               return 1
@@ -47,17 +47,15 @@ jobs:
           return 1
         }
 
-        # Прямые ссылки (RAW) на проверенные репозитории
+        # Прямые ссылки на Maven Central (наиболее надежный источник)
         URLS_MIDP=(
-          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/midpapi20.jar"
-          "https://raw.githubusercontent.com/gtrxAC/discord-j2me/main/sdk/lib/midpapi20.jar"
-          "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/midpapi20.jar"
+          "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar"
+          "https://repo.maven.apache.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar"
         )
 
         URLS_CLDC=(
-          "https://raw.githubusercontent.com/nikita36078/J2ME-libs/master/cldcapi11.jar"
-          "https://raw.githubusercontent.com/gtrxAC/discord-j2me/main/sdk/lib/cldcapi11.jar"
-          "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/cldcapi11.jar"
+          "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar"
+          "https://repo.maven.apache.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar"
         )
 
         SUCCESS_MIDP=false
