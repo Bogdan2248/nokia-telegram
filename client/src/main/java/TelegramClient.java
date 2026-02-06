@@ -1,6 +1,8 @@
 import javax.microedition.midlet.*;
 import javax.microedition.lcdui.*;
 import javax.microedition.io.*;
+import javax.microedition.rms.*;
+import javax.microedition.io.file.*;
 import java.io.*;
 import java.util.*;
 
@@ -8,11 +10,14 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     private Display display;
     private Form authForm, messageForm;
     private TextField phoneField, codeField, serverField, replyField;
-    private Command sendCodeCmd, loginCmd, refreshChatsCmd, sendMsgCmd, backCmd, reactCmd, exitCmd;
-    private List chatList, reactionEmojiList;
+    private Command sendCodeCmd, loginCmd, refreshChatsCmd, sendMsgCmd, backCmd, exitCmd, sendPhotoCmd;
+    private List chatList, fileList;
     private long currentChatId;
     private long lastMsgId = 0;
     private boolean isAutoRefreshRunning = false;
+    private String lastMessagesJson = "";
+    private static final String RS_NAME = "tg_settings";
+    private String currentPath = "file:///C:/"; // Default for Nokia C5-00
 
     public TelegramClient() {
         display = Display.getDisplay(this);
@@ -20,14 +25,17 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         authForm = new Form("Telegram Auth");
         phoneField = new TextField("Phone (+7...)", "+", 20, TextField.PHONENUMBER);
         codeField = new TextField("Code", "", 10, TextField.NUMERIC);
-        serverField = new TextField("Server URL", "http://10.20.184.199:5000", 200, TextField.URL);
+        serverField = new TextField("Server URL", "http://", 200, TextField.URL);
         
+        loadSettings();
+
         sendCodeCmd = new Command("Send Code", Command.OK, 1);
         loginCmd = new Command("Login", Command.OK, 2);
         refreshChatsCmd = new Command("Refresh", Command.SCREEN, 3);
         backCmd = new Command("Back", Command.BACK, 1);
         exitCmd = new Command("Exit", Command.EXIT, 4);
-        Command settingsCmd = new Command("Settings", Command.SCREEN, 5);
+        sendPhotoCmd = new Command("Send Photo", Command.SCREEN, 5);
+        Command settingsCmd = new Command("Settings", Command.SCREEN, 6);
         
         authForm.append(phoneField);
         authForm.append(codeField);
@@ -44,29 +52,56 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         chatList.addCommand(exitCmd);
         chatList.setCommandListener(this);
 
-        reactionEmojiList = new List("React with...", List.IMPLICIT);
-        reactionEmojiList.append("👍", null);
-        reactionEmojiList.append("❤️", null);
-        reactionEmojiList.append("🔥", null);
-        reactionEmojiList.append("👏", null);
-        reactionEmojiList.append("😢", null);
-        reactionEmojiList.addCommand(backCmd);
-        reactionEmojiList.setCommandListener(this);
+        fileList = new List("Select Photo", List.IMPLICIT);
+        fileList.addCommand(backCmd);
+        fileList.setCommandListener(this);
 
         messageForm = new Form("Messages");
         replyField = new TextField("Reply", "", 100, TextField.ANY);
         sendMsgCmd = new Command("Send", Command.OK, 1);
-        reactCmd = new Command("React", Command.SCREEN, 2);
         messageForm.addCommand(sendMsgCmd);
-        messageForm.addCommand(reactCmd);
+        messageForm.addCommand(sendPhotoCmd);
         messageForm.addCommand(backCmd);
         messageForm.addCommand(settingsCmd);
         messageForm.addCommand(exitCmd);
         messageForm.setCommandListener(this);
     }
 
+    private void loadSettings() {
+        RecordStore rs = null;
+        try {
+            rs = RecordStore.openRecordStore(RS_NAME, true);
+            if (rs.getNumRecords() > 0) {
+                byte[] b = rs.getRecord(1);
+                serverField.setString(new String(b));
+            }
+        } catch (Exception e) {}
+        finally {
+            try { if (rs != null) rs.closeRecordStore(); } catch (Exception e) {}
+        }
+    }
+
+    private void saveSettings() {
+        RecordStore rs = null;
+        try {
+            RecordStore.deleteRecordStore(RS_NAME);
+            rs = RecordStore.openRecordStore(RS_NAME, true);
+            byte[] b = serverField.getString().getBytes();
+            rs.addRecord(b, 0, b.length);
+        } catch (Exception e) {}
+        finally {
+            try { if (rs != null) rs.closeRecordStore(); } catch (Exception e) {}
+        }
+    }
+
     protected void startApp() {
-        display.setCurrent(authForm);
+        if (serverField.getString().length() > 8) {
+            display.setCurrent(chatList);
+            new Thread() { public void run() { loadChats(); } }.start();
+        } else {
+            display.setCurrent(authForm);
+        }
+        
         if (!isAutoRefreshRunning) {
             isAutoRefreshRunning = true;
             new Thread(this).start();
@@ -76,12 +111,9 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     public void run() {
         while (isAutoRefreshRunning) {
             try {
-                Thread.sleep(10000); // Автообновление каждые 10 сек (было 5)
+                Thread.sleep(10000);
                 if (display.getCurrent() == messageForm) {
                     loadMessages(currentChatId);
-                } else if (display.getCurrent() == chatList) {
-                    // Список чатов обновляем реже, только если он пустой или по команде
-                    if (chatList.size() == 0) loadChats();
                 }
             } catch (Exception e) {}
         }
@@ -93,8 +125,10 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
 
     public void commandAction(Command c, Displayable d) {
         if (c == sendCodeCmd) {
+            saveSettings();
             new Thread() { public void run() { sendCode(); } }.start();
         } else if (c == loginCmd) {
+            saveSettings();
             new Thread() { public void run() { login(); } }.start();
         } else if (c == refreshChatsCmd || (c == List.SELECT_COMMAND && d == chatList)) {
             if (d == chatList && c == List.SELECT_COMMAND) {
@@ -103,6 +137,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 int end = selected.lastIndexOf(']');
                 if (start > 0 && end > start) {
                     currentChatId = Long.parseLong(selected.substring(start, end));
+                    lastMessagesJson = ""; // Reset for new chat
                     new Thread() { public void run() { loadMessages(currentChatId); } }.start();
                 }
             } else {
@@ -110,21 +145,33 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             }
         } else if (c.getLabel().equals("Settings")) {
             display.setCurrent(authForm);
+        } else if (c == sendMsgCmd) {
+            new Thread() { public void run() { sendMessage(); } }.start();
+        } else if (c == sendPhotoCmd) {
+            new Thread() { public void run() { browseFiles(currentPath); } }.start();
+        } else if (d == fileList && c == List.SELECT_COMMAND) {
+            String selected = fileList.getString(fileList.getSelectedIndex());
+            if (selected.equals(".. [Up]")) {
+                int lastSlash = currentPath.lastIndexOf('/', currentPath.length() - 2);
+                if (lastSlash != -1) {
+                    currentPath = currentPath.substring(0, lastSlash + 1);
+                    new Thread() { public void run() { browseFiles(currentPath); } }.start();
+                }
+            } else if (selected.endsWith("/")) {
+                currentPath += selected;
+                new Thread() { public void run() { browseFiles(currentPath); } }.start();
+            } else {
+                final String fullPath = currentPath + selected;
+                new Thread() { public void run() { sendPhoto(fullPath); } }.start();
+            }
         } else if (c == backCmd) {
-            if (d == reactionEmojiList) {
+            if (d == fileList) {
                 display.setCurrent(messageForm);
             } else if (d == messageForm) {
                 display.setCurrent(chatList);
             } else {
                 display.setCurrent(authForm);
             }
-        } else if (c == reactCmd) {
-            display.setCurrent(reactionEmojiList);
-        } else if (d == reactionEmojiList && c == List.SELECT_COMMAND) {
-            final String emoji = reactionEmojiList.getString(reactionEmojiList.getSelectedIndex());
-            new Thread() { public void run() { sendReaction(emoji); } }.start();
-        } else if (c == sendMsgCmd) {
-            new Thread() { public void run() { sendMessage(); } }.start();
         } else if (c == exitCmd) {
             destroyApp(true);
             notifyDestroyed();
@@ -160,6 +207,8 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             return;
         }
         if (res.startsWith("[") || res.startsWith("{")) {
+            // Сохраняем индекс, чтобы не перекидывало в конец/начало
+            int oldIdx = chatList.getSelectedIndex();
             chatList.deleteAll();
             try {
                 int searchIdx = 0;
@@ -174,22 +223,24 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                     name = decodeUnicode(name);
                     chatList.append(name + " [" + id + "]", null);
                     
-                    // Сдвигаем поиск за пределы текущего объекта
                     int nextObj = res.indexOf("}", idPos);
                     if (nextObj == -1) break;
                     searchIdx = nextObj;
                 }
                 
-                if (chatList.size() == 0) {
-                    showAlert("Chats", "No chats found. Raw: " + (res.length() > 100 ? res.substring(0, 100) : res));
+                if (chatList.size() > 0) {
+                    if (oldIdx >= 0 && oldIdx < chatList.size()) {
+                        chatList.setSelectedIndex(oldIdx, true);
+                    }
+                    if (display.getCurrent() != chatList && display.getCurrent() != messageForm && display.getCurrent() != authForm) {
+                        display.setCurrent(chatList);
+                    }
                 } else {
-                    display.setCurrent(chatList);
+                    showAlert("Chats", "No chats found.");
                 }
             } catch (Exception e) {
-                showAlert("Parse Error", e.getMessage() + "\nRaw: " + (res.length() > 100 ? res.substring(0, 100) : res));
+                showAlert("Parse Error", e.getMessage());
             }
-        } else {
-            showAlert("Error", "Server error. Response: " + (res.length() > 100 ? res.substring(0, 100) : res));
         }
     }
 
@@ -269,6 +320,12 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             return;
         }
         
+        // Если сообщения не изменились, ничего не перерисовываем, чтобы не прыгал фокус
+        if (res.equals(lastMessagesJson)) {
+            return;
+        }
+        lastMessagesJson = res;
+        
         messageForm.deleteAll();
         try {
             int searchIdx = 0;
@@ -280,16 +337,16 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 String text = getJsonValue(res, "text", fromPos);
                 String msgIdStr = getJsonValue(res, "id", fromPos);
                 String hasPhotoStr = getJsonValue(res, "has_photo", fromPos);
-                String reactions = getJsonValue(res, "reactions", fromPos);
+                // String reactions = getJsonValue(res, "reactions", fromPos); // Реакции удалены
                 String replyTo = getJsonValue(res, "reply_to", fromPos);
 
                 from = decodeUnicode(from);
                 text = decodeUnicode(text);
-                if (reactions != null) reactions = decodeUnicode(reactions);
                 if (replyTo != null) replyTo = decodeUnicode(replyTo);
 
+                String displayMsg = text;
                 if (replyTo != null && replyTo.length() > 0) {
-                    messageForm.append(new StringItem(null, " > Re: " + replyTo + "\n"));
+                    displayMsg = "[Re: " + replyTo + "] " + text;
                 }
 
                 if (msgIdStr != null) {
@@ -297,17 +354,13 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 }
 
                 if ("1".equals(hasPhotoStr)) {
-                    messageForm.append(new StringItem(from + ": ", text + " [Photo]"));
+                    messageForm.append(new StringItem(from + ": ", displayMsg + " [Photo]"));
                     try {
                         Image img = loadHttpImage(getBaseUrl() + "/photo?chat_id=" + chatId + "&msg_id=" + msgIdStr);
                         if (img != null) messageForm.append(new ImageItem(null, img, ImageItem.LAYOUT_CENTER, "Photo"));
                     } catch (Exception e) {}
                 } else {
-                    messageForm.append(new StringItem(from + ": ", text));
-                }
-
-                if (reactions != null && reactions.length() > 0) {
-                    messageForm.append(new StringItem(null, " [" + reactions + "]\n"));
+                    messageForm.append(new StringItem(from + ": ", displayMsg));
                 }
 
                 int nextObj = res.indexOf("}", fromPos);
@@ -315,8 +368,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 searchIdx = nextObj;
             }
             messageForm.append(replyField);
-            Displayable current = display.getCurrent();
-            if (current != messageForm && current != reactionEmojiList) {
+            if (display.getCurrent() != messageForm) {
                 display.setCurrent(messageForm);
             }
         } catch (Exception e) {
@@ -327,18 +379,92 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     private void sendMessage() {
         String text = replyField.getString();
         if (text.length() > 0) {
-            String url = getBaseUrl() + "/send?id=" + currentChatId + "&text=" + urlEncode(text);
-            httpGet(url);
+            final String encodedText = urlEncode(text);
+            new Thread() {
+                public void run() {
+                    String url = getBaseUrl() + "/send?id=" + currentChatId + "&text=" + encodedText;
+                    httpGet(url);
+                    loadMessages(currentChatId);
+                }
+            }.start();
             replyField.setString("");
-            loadMessages(currentChatId);
         }
     }
 
-    private void sendReaction(String emoji) {
-        if (lastMsgId != 0) {
-            String url = getBaseUrl() + "/react?chat_id=" + currentChatId + "&msg_id=" + lastMsgId + "&emoji=" + urlEncode(emoji);
-            httpGet(url);
-            loadMessages(currentChatId);
+    // Удалена функция sendReaction
+
+    private void browseFiles(String path) {
+        fileList.deleteAll();
+        fileList.setTitle("Path: " + path);
+        try {
+            FileConnection fc = (FileConnection) Connector.open(path);
+            Enumeration en = fc.list();
+            fileList.append(".. [Up]", null);
+            while (en.hasMoreElements()) {
+                String file = (String) en.nextElement();
+                fileList.append(file, null);
+            }
+            fc.close();
+            display.setCurrent(fileList);
+        } catch (Exception e) {
+            showAlert("File Error", "Check permissions!\n" + e.getMessage());
+            // Fallback for roots
+            try {
+                Enumeration roots = FileSystemRegistry.listRoots();
+                fileList.deleteAll();
+                while (roots.hasMoreElements()) {
+                    fileList.append("file:///" + roots.nextElement(), null);
+                }
+                display.setCurrent(fileList);
+            } catch (Exception e2) {
+                showAlert("Root Error", e2.getMessage());
+            }
+        }
+    }
+
+    private void sendPhoto(String filePath) {
+        FileConnection fc = null;
+        InputStream is = null;
+        OutputStream os = null;
+        HttpConnection hc = null;
+        try {
+            fc = (FileConnection) Connector.open(filePath);
+            if (!fc.exists()) {
+                showAlert("Error", "File not found");
+                return;
+            }
+            is = fc.openInputStream();
+            
+            String url = getBaseUrl() + "/upload?id=" + currentChatId;
+            hc = (HttpConnection) Connector.open(url);
+            hc.setRequestMethod(HttpConnection.POST);
+            hc.setRequestProperty("Content-Type", "image/jpeg"); // assume jpeg
+            hc.setRequestProperty("bypass-tunnel-reminder", "true");
+            
+            os = hc.openOutputStream();
+            byte[] buf = new byte[1024];
+            int len;
+            while ((len = is.read(buf)) != -1) {
+                os.write(buf, 0, len);
+            }
+            os.flush();
+            
+            int rc = hc.getResponseCode();
+            if (rc == HttpConnection.HTTP_OK) {
+                display.setCurrent(messageForm);
+                loadMessages(currentChatId);
+            } else {
+                showAlert("Upload Error", "Code: " + rc);
+            }
+        } catch (Exception e) {
+            showAlert("Upload Error", e.getMessage());
+        } finally {
+            try {
+                if (is != null) is.close();
+                if (fc != null) fc.close();
+                if (os != null) os.close();
+                if (hc != null) hc.close();
+            } catch (Exception e) {}
         }
     }
 

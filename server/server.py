@@ -181,16 +181,44 @@ async def send_message():
         
         # Теперь используем стандартный unquote, так как клиент шлет UTF-8
         import urllib.parse
-        text = urllib.parse.unquote(text)
+        text = urllib.parse.unquote(text) if text else ""
 
         print(f"[>>>] Sending message to {chat_id}: {text}")
         c = await get_client()
         if not await c.is_user_authorized(): return jsonify({"status": "unauthorized"})
+        
+        if request.method == 'POST':
+            # Обработка загрузки фото
+            files = await request.files
+            if 'photo' in files:
+                photo = files['photo']
+                photo_bytes = photo.read()
+                await c.send_file(chat_id, photo_bytes, caption=text)
+                return jsonify({"status": "ok"})
+        
         await c.send_message(chat_id, text)
         return jsonify({"status": "ok"})
     except Exception as e:
         print(f"[!!!] Error sending message: {e}")
         return jsonify({"status": "error", "message": str(e)})
+
+@app.route('/upload', methods=['POST'])
+async def upload_photo():
+    try:
+        chat_id = int(request.args.get('id'))
+        files = await request.files
+        if 'photo' not in files:
+            return jsonify({"status": "error", "message": "No photo"}), 400
+        
+        photo = files['photo']
+        photo_bytes = photo.read()
+        
+        c = await get_client()
+        await c.send_file(chat_id, photo_bytes)
+        return "OK"
+    except Exception as e:
+        print(f"[!!!] Error uploading photo: {e}")
+        return str(e), 500
 
 @app.route('/api/react', methods=['GET'])
 @app.route('/react', methods=['GET'])
