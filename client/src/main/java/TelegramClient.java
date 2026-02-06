@@ -177,82 +177,95 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     }
 
     private void loadChats() {
-        String res = httpGet(getBaseUrl() + "/chats");
-        if (res == null || res.length() == 0) {
-            showAlert("Error", "Empty response from server");
-            return;
-        }
-        if (res.startsWith("[") || res.startsWith("{")) {
-            // Сохраняем индекс, чтобы не перекидывало в конец/начало
-            int oldIdx = chatList.getSelectedIndex();
-            chatList.deleteAll();
-            try {
-                int searchIdx = 0;
-                while (true) {
-                    String id = getJsonValue(res, "id", searchIdx);
-                    if (id == null) break;
+        new Thread() {
+            public void run() {
+                try {
+                    int oldIdx = chatList.getSelectedIndex();
+                    String res = httpGet(getBaseUrl() + "/chats");
+                    if (res == null) return;
                     
-                    int idPos = res.indexOf("\"id\"", searchIdx);
-                    String name = getJsonValue(res, "name", idPos);
-                    if (name == null) name = "Unknown";
+                    chatList.deleteAll();
+                    int searchIdx = 0;
+                    while (true) {
+                        int namePos = res.indexOf("\"name\"", searchIdx);
+                        if (namePos == -1) break;
+                        
+                        String name = getJsonValue(res, "name", namePos);
+                        String id = getJsonValue(res, "id", namePos);
+                        String unread = getJsonValue(res, "unread", namePos);
+                        
+                        if (name != null) {
+                            name = decodeUnicode(name);
+                            String label = name + (unread != null && !"0".equals(unread) ? " [" + unread + "]" : "") + (id != null ? " [" + id + "]" : "");
+                            chatList.append(label, null);
+                        }
+                        
+                        int nextObj = res.indexOf("}", namePos);
+                        if (nextObj == -1) break;
+                        searchIdx = nextObj;
+                    }
                     
-                    name = decodeUnicode(name);
-                    chatList.append(name + " [" + id + "]", null);
-                    
-                    int nextObj = res.indexOf("}", idPos);
-                    if (nextObj == -1) break;
-                    searchIdx = nextObj;
-                }
-                
-                if (chatList.size() > 0) {
-                    if (oldIdx >= 0 && oldIdx < chatList.size()) {
+                    if (oldIdx != -1 && oldIdx < chatList.size()) {
                         chatList.setSelectedIndex(oldIdx, true);
                     }
-                    if (display.getCurrent() != chatList && display.getCurrent() != messageForm && display.getCurrent() != authForm) {
+                    
+                    if (display.getCurrent() != chatList && display.getCurrent() != authForm) {
                         display.setCurrent(chatList);
                     }
-                } else {
-                    showAlert("Chats", "No chats found.");
+                } catch (Exception e) {
+                    showAlert("Load Error", e.getMessage());
                 }
-            } catch (Exception e) {
-                showAlert("Parse Error", e.getMessage());
             }
-        }
+        }.start();
     }
 
     private String getJsonValue(String json, String key, int startIdx) {
-        int keyIdx = json.indexOf("\"" + key + "\"", startIdx);
+        String searchKey = "\"" + key + "\":";
+        int keyIdx = json.indexOf(searchKey, startIdx);
         if (keyIdx == -1) return null;
+        int valStart = keyIdx + searchKey.length();
+        while (valStart < json.length() && (json.charAt(valStart) == ' ' || json.charAt(valStart) == '\"')) {
+            valStart++;
+        }
         
-        int colonIdx = json.indexOf(":", keyIdx);
-        if (colonIdx == -1) return null;
-        
-        int valStart = -1;
+        boolean isString = json.charAt(valStart - 1) == '\"';
         int valEnd = -1;
         
-        for (int i = colonIdx + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '\"') {
-                valStart = i + 1;
-                valEnd = json.indexOf("\"", valStart);
-                break;
-            } else if (Character.isDigit(c) || c == '-' || c == 't' || c == 'f') {
-                valStart = i;
-                for (int j = i; j < json.length(); j++) {
-                    char c2 = json.charAt(j);
-                    if (c2 == ',' || c2 == '}' || c2 == ' ' || c2 == ']') {
-                        valEnd = j;
-                        break;
-                    }
+        if (isString) {
+            int current = valStart;
+            while (current < json.length()) {
+                int nextQuote = json.indexOf("\"", current);
+                if (nextQuote == -1) break;
+                // Проверяем, не экранирована ли кавычка
+                if (json.charAt(nextQuote - 1) != '\\') {
+                    valEnd = nextQuote;
+                    break;
                 }
-                break;
+                current = nextQuote + 1;
             }
+        } else {
+            valEnd = json.indexOf(",", valStart);
+            int endObj = json.indexOf("}", valStart);
+            if (valEnd == -1 || (endObj != -1 && endObj < valEnd)) valEnd = endObj;
         }
         
-        if (valStart != -1 && valEnd != -1) {
-            return json.substring(valStart, valEnd).trim();
+        if (valEnd == -1) return null;
+        String val = json.substring(valStart, valEnd);
+        // Если это строка, убираем экранирование кавычек
+        if (isString && val.indexOf("\\\"") != -1) {
+            StringBuffer sb = new StringBuffer();
+            for (int i = 0; i < val.length(); i++) {
+                char c = val.charAt(i);
+                if (c == '\\' && i + 1 < val.length() && val.charAt(i + 1) == '\"') {
+                    sb.append('\"');
+                    i++;
+                } else {
+                    sb.append(c);
+                }
+            }
+            return sb.toString();
         }
-        return null;
+        return val;
     }
 
     private String decodeUnicode(String s) {
