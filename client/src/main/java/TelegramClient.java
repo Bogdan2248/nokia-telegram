@@ -156,60 +156,100 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             showAlert("Error", "Empty response from server");
             return;
         }
-        if (res.startsWith("[")) {
+        if (res.startsWith("[") || res.startsWith("{")) {
             chatList.deleteAll();
             try {
-                int idx = 0;
-                while ((idx = res.indexOf("\"id\":", idx)) != -1) {
-                    // Парсим ID (может заканчиваться запятой или скобкой)
-                    int idStart = idx + 5;
-                    int idEnd = res.indexOf(",", idStart);
-                    if (idEnd == -1) idEnd = res.indexOf("}", idStart);
-                    if (idEnd == -1) break;
+                int searchIdx = 0;
+                while (true) {
+                    String id = getJsonValue(res, "id", searchIdx);
+                    if (id == null) break;
                     
-                    String id = res.substring(idStart, idEnd).trim();
+                    int idPos = res.indexOf("\"id\"", searchIdx);
+                    String name = getJsonValue(res, "name", idPos);
+                    if (name == null) name = "Unknown";
                     
-                    // Парсим Name
-                    int nameLabel = res.indexOf("\"name\":\"", idx);
-                    if (nameLabel == -1) { idx = idEnd; continue; }
-                    int nameStart = nameLabel + 8;
-                    int nameEnd = res.indexOf("\"", nameStart);
-                    if (nameEnd == -1) { idx = idEnd; continue; }
-                    
-                    String name = res.substring(nameStart, nameEnd);
                     name = decodeUnicode(name);
                     chatList.append(name + " [" + id + "]", null);
-                    idx = nameEnd;
+                    
+                    // Сдвигаем поиск за пределы текущего объекта
+                    int nextObj = res.indexOf("}", idPos);
+                    if (nextObj == -1) break;
+                    searchIdx = nextObj;
                 }
                 
                 if (chatList.size() == 0) {
-                    showAlert("Chats", "No chats found or parsing error. Raw: " + (res.length() > 50 ? res.substring(0, 50) : res));
+                    showAlert("Chats", "No chats found. Raw: " + (res.length() > 100 ? res.substring(0, 100) : res));
                 } else {
                     display.setCurrent(chatList);
                 }
             } catch (Exception e) {
-                showAlert("Parse Error", e.getMessage() + "\nRaw: " + (res.length() > 50 ? res.substring(0, 50) : res));
+                showAlert("Parse Error", e.getMessage() + "\nRaw: " + (res.length() > 100 ? res.substring(0, 100) : res));
             }
         } else {
-            showAlert("Error", "Auth required or server error. Response: " + (res.length() > 50 ? res.substring(0, 50) : res));
+            showAlert("Error", "Server error. Response: " + (res.length() > 100 ? res.substring(0, 100) : res));
         }
     }
 
+    private String getJsonValue(String json, String key, int startIdx) {
+        int keyIdx = json.indexOf("\"" + key + "\"", startIdx);
+        if (keyIdx == -1) return null;
+        
+        int colonIdx = json.indexOf(":", keyIdx);
+        if (colonIdx == -1) return null;
+        
+        int valStart = -1;
+        int valEnd = -1;
+        
+        for (int i = colonIdx + 1; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '\"') {
+                valStart = i + 1;
+                valEnd = json.indexOf("\"", valStart);
+                break;
+            } else if (Character.isDigit(c) || c == '-' || c == 't' || c == 'f') {
+                valStart = i;
+                for (int j = i; j < json.length(); j++) {
+                    char c2 = json.charAt(j);
+                    if (c2 == ',' || c2 == '}' || c2 == ' ' || c2 == ']') {
+                        valEnd = j;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        
+        if (valStart != -1 && valEnd != -1) {
+            return json.substring(valStart, valEnd).trim();
+        }
+        return null;
+    }
+
     private String decodeUnicode(String s) {
-        if (s == null || s.indexOf("\\u") == -1) return s;
+        if (s == null) return "";
         StringBuffer sb = new StringBuffer();
         int idx = 0;
         while (idx < s.length()) {
             char c = s.charAt(idx);
-            if (c == '\\' && idx + 5 < s.length() && s.charAt(idx + 1) == 'u') {
-                try {
-                    String hex = s.substring(idx + 2, idx + 6);
-                    int code = Integer.parseInt(hex, 16);
-                    sb.append((char) code);
-                    idx += 6;
-                } catch (Exception e) {
-                    sb.append(c);
-                    idx++;
+            if (c == '\\' && idx + 1 < s.length()) {
+                char next = s.charAt(idx + 1);
+                if (next == 'u' && idx + 5 < s.length()) {
+                    try {
+                        String hex = s.substring(idx + 2, idx + 6);
+                        int code = Integer.parseInt(hex, 16);
+                        sb.append((char) code);
+                        idx += 6;
+                    } catch (Exception e) {
+                        sb.append(c);
+                        idx++;
+                    }
+                } else {
+                    if (next == 'n') sb.append('\n');
+                    else if (next == 't') sb.append('\t');
+                    else if (next == '\"') sb.append('\"');
+                    else if (next == '\\') sb.append('\\');
+                    else sb.append(next);
+                    idx += 2;
                 }
             } else {
                 sb.append(c);
@@ -228,65 +268,48 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         
         messageForm.deleteAll();
         try {
-            int idx = 0;
-            while ((idx = res.indexOf("\"from\":\"", idx)) != -1) {
-                int fromStart = idx + 8;
-                int fromEnd = res.indexOf("\"", fromStart);
-                if (fromEnd == -1) break;
-                String from = decodeUnicode(res.substring(fromStart, fromEnd));
+            int searchIdx = 0;
+            while (true) {
+                String from = getJsonValue(res, "from", searchIdx);
+                if (from == null) break;
                 
-                int replyIdx = res.indexOf("\"reply_to\":\"", idx);
-                if (replyIdx != -1 && replyIdx < res.indexOf("}", idx)) {
-                    int rStart = replyIdx + 12;
-                    int rEnd = res.indexOf("\"", rStart);
-                    if (rEnd != -1) {
-                        String rText = decodeUnicode(res.substring(rStart, rEnd));
-                        messageForm.append(new StringItem(null, " > Re: " + rText + "\n"));
-                    }
+                int fromPos = res.indexOf("\"from\"", searchIdx);
+                String text = getJsonValue(res, "text", fromPos);
+                String msgIdStr = getJsonValue(res, "id", fromPos);
+                String hasPhotoStr = getJsonValue(res, "has_photo", fromPos);
+                String reactions = getJsonValue(res, "reactions", fromPos);
+                String replyTo = getJsonValue(res, "reply_to", fromPos);
+
+                from = decodeUnicode(from);
+                text = decodeUnicode(text);
+                if (reactions != null) reactions = decodeUnicode(reactions);
+                if (replyTo != null) replyTo = decodeUnicode(replyTo);
+
+                if (replyTo != null && replyTo.length() > 0) {
+                    messageForm.append(new StringItem(null, " > Re: " + replyTo + "\n"));
                 }
 
-                int textLabel = res.indexOf("\"text\":\"", fromEnd);
-                if (textLabel == -1) { idx = res.indexOf("}", idx); continue; }
-                int textStart = textLabel + 8;
-                int textEnd = res.indexOf("\"", textStart);
-                if (textEnd == -1) { idx = res.indexOf("}", idx); continue; }
-                String text = decodeUnicode(res.substring(textStart, textEnd));
-                
-                int photoIdx = res.indexOf("\"has_photo\":1", idx);
-                String msgId = "0";
-                int idIdx = res.indexOf("\"id\":", idx);
-                if (idIdx != -1) {
-                    int idEnd = res.indexOf(",", idIdx);
-                    if (idEnd == -1) idEnd = res.indexOf("}", idIdx);
-                    if (idEnd != -1) {
-                        msgId = res.substring(idIdx + 5, idEnd).trim();
-                        lastMsgId = Long.parseLong(msgId);
-                    }
+                if (msgIdStr != null) {
+                    try { lastMsgId = Long.parseLong(msgIdStr); } catch (Exception e) {}
                 }
 
-                if (photoIdx != -1 && photoIdx < res.indexOf("}", idx)) {
+                if ("1".equals(hasPhotoStr)) {
                     messageForm.append(new StringItem(from + ": ", text + " [Photo]"));
                     try {
-                        Image img = loadHttpImage(getBaseUrl() + "/photo?chat_id=" + chatId + "&msg_id=" + msgId);
+                        Image img = loadHttpImage(getBaseUrl() + "/photo?chat_id=" + chatId + "&msg_id=" + msgIdStr);
                         if (img != null) messageForm.append(new ImageItem(null, img, ImageItem.LAYOUT_CENTER, "Photo"));
                     } catch (Exception e) {}
                 } else {
                     messageForm.append(new StringItem(from + ": ", text));
                 }
 
-                int reacIdx = res.indexOf("\"reactions\":\"", idx);
-                if (reacIdx != -1 && reacIdx < res.indexOf("}", idx)) {
-                    int rStart = reacIdx + 13;
-                    int rEnd = res.indexOf("\"", rStart);
-                    if (rEnd != -1) {
-                        String reactions = res.substring(rStart, rEnd);
-                        if (reactions.length() > 0) {
-                            messageForm.append(new StringItem(null, " [" + reactions + "]\n"));
-                        }
-                    }
+                if (reactions != null && reactions.length() > 0) {
+                    messageForm.append(new StringItem(null, " [" + reactions + "]\n"));
                 }
-                idx = res.indexOf("}", idx);
-                if (idx == -1) break;
+
+                int nextObj = res.indexOf("}", fromPos);
+                if (nextObj == -1) break;
+                searchIdx = nextObj;
             }
             messageForm.append(replyField);
             Displayable current = display.getCurrent();
