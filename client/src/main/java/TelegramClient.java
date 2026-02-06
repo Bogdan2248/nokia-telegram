@@ -2,7 +2,6 @@ import javax.microedition.midlet.*;
 import javax.microedition.lcdui.*;
 import javax.microedition.io.*;
 import javax.microedition.rms.*;
-import javax.microedition.io.file.*;
 import java.io.*;
 import java.util.*;
 
@@ -10,14 +9,13 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     private Display display;
     private Form authForm, messageForm;
     private TextField phoneField, codeField, serverField, replyField;
-    private Command sendCodeCmd, loginCmd, refreshChatsCmd, sendMsgCmd, backCmd, exitCmd, sendPhotoCmd;
-    private List chatList, fileList;
+    private Command sendCodeCmd, loginCmd, refreshChatsCmd, sendMsgCmd, backCmd, exitCmd;
+    private List chatList;
     private long currentChatId;
     private long lastMsgId = 0;
     private boolean isAutoRefreshRunning = false;
     private String lastMessagesJson = "";
     private static final String RS_NAME = "tg_settings";
-    private String currentPath = "file:///C:/"; // Default for Nokia C5-00
 
     public TelegramClient() {
         display = Display.getDisplay(this);
@@ -34,8 +32,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         refreshChatsCmd = new Command("Refresh", Command.SCREEN, 3);
         backCmd = new Command("Back", Command.BACK, 1);
         exitCmd = new Command("Exit", Command.EXIT, 4);
-        sendPhotoCmd = new Command("Send Photo", Command.SCREEN, 5);
-        Command settingsCmd = new Command("Settings", Command.SCREEN, 6);
+        Command settingsCmd = new Command("Settings", Command.SCREEN, 5);
         
         authForm.append(phoneField);
         authForm.append(codeField);
@@ -52,15 +49,10 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         chatList.addCommand(exitCmd);
         chatList.setCommandListener(this);
 
-        fileList = new List("Select Photo", List.IMPLICIT);
-        fileList.addCommand(backCmd);
-        fileList.setCommandListener(this);
-
         messageForm = new Form("Messages");
         replyField = new TextField("Reply", "", 100, TextField.ANY);
         sendMsgCmd = new Command("Send", Command.OK, 1);
         messageForm.addCommand(sendMsgCmd);
-        messageForm.addCommand(sendPhotoCmd);
         messageForm.addCommand(backCmd);
         messageForm.addCommand(settingsCmd);
         messageForm.addCommand(exitCmd);
@@ -147,27 +139,8 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             display.setCurrent(authForm);
         } else if (c == sendMsgCmd) {
             new Thread() { public void run() { sendMessage(); } }.start();
-        } else if (c == sendPhotoCmd) {
-            new Thread() { public void run() { browseFiles(currentPath); } }.start();
-        } else if (d == fileList && c == List.SELECT_COMMAND) {
-            String selected = fileList.getString(fileList.getSelectedIndex());
-            if (selected.equals(".. [Up]")) {
-                int lastSlash = currentPath.lastIndexOf('/', currentPath.length() - 2);
-                if (lastSlash != -1) {
-                    currentPath = currentPath.substring(0, lastSlash + 1);
-                    new Thread() { public void run() { browseFiles(currentPath); } }.start();
-                }
-            } else if (selected.endsWith("/")) {
-                currentPath += selected;
-                new Thread() { public void run() { browseFiles(currentPath); } }.start();
-            } else {
-                final String fullPath = currentPath + selected;
-                new Thread() { public void run() { sendPhoto(fullPath); } }.start();
-            }
         } else if (c == backCmd) {
-            if (d == fileList) {
-                display.setCurrent(messageForm);
-            } else if (d == messageForm) {
+            if (d == messageForm) {
                 display.setCurrent(chatList);
             } else {
                 display.setCurrent(authForm);
@@ -392,81 +365,6 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     }
 
     // Удалена функция sendReaction
-
-    private void browseFiles(String path) {
-        fileList.deleteAll();
-        fileList.setTitle("Path: " + path);
-        try {
-            FileConnection fc = (FileConnection) Connector.open(path);
-            Enumeration en = fc.list();
-            fileList.append(".. [Up]", null);
-            while (en.hasMoreElements()) {
-                String file = (String) en.nextElement();
-                fileList.append(file, null);
-            }
-            fc.close();
-            display.setCurrent(fileList);
-        } catch (Exception e) {
-            showAlert("File Error", "Check permissions!\n" + e.getMessage());
-            // Fallback for roots
-            try {
-                Enumeration roots = FileSystemRegistry.listRoots();
-                fileList.deleteAll();
-                while (roots.hasMoreElements()) {
-                    fileList.append("file:///" + roots.nextElement(), null);
-                }
-                display.setCurrent(fileList);
-            } catch (Exception e2) {
-                showAlert("Root Error", e2.getMessage());
-            }
-        }
-    }
-
-    private void sendPhoto(String filePath) {
-        FileConnection fc = null;
-        InputStream is = null;
-        OutputStream os = null;
-        HttpConnection hc = null;
-        try {
-            fc = (FileConnection) Connector.open(filePath);
-            if (!fc.exists()) {
-                showAlert("Error", "File not found");
-                return;
-            }
-            is = fc.openInputStream();
-            
-            String url = getBaseUrl() + "/upload?id=" + currentChatId;
-            hc = (HttpConnection) Connector.open(url);
-            hc.setRequestMethod(HttpConnection.POST);
-            hc.setRequestProperty("Content-Type", "image/jpeg"); // assume jpeg
-            hc.setRequestProperty("bypass-tunnel-reminder", "true");
-            
-            os = hc.openOutputStream();
-            byte[] buf = new byte[1024];
-            int len;
-            while ((len = is.read(buf)) != -1) {
-                os.write(buf, 0, len);
-            }
-            os.flush();
-            
-            int rc = hc.getResponseCode();
-            if (rc == HttpConnection.HTTP_OK) {
-                display.setCurrent(messageForm);
-                loadMessages(currentChatId);
-            } else {
-                showAlert("Upload Error", "Code: " + rc);
-            }
-        } catch (Exception e) {
-            showAlert("Upload Error", e.getMessage());
-        } finally {
-            try {
-                if (is != null) is.close();
-                if (fc != null) fc.close();
-                if (os != null) os.close();
-                if (hc != null) hc.close();
-            } catch (Exception e) {}
-        }
-    }
 
     private String urlEncode(String s) {
         if (s == null) return "";
