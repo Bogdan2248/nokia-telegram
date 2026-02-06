@@ -1,118 +1,88 @@
-name: Build J2ME JAR
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up JDK 8
-      uses: actions/setup-java@v4
-      with:
-        java-version: '8'
-        distribution: 'temurin'
-
-    - name: Get Libraries
-      run: |
-        mkdir -p lib
-        # Функция для скачивания с проверкой на 404 и HTML-ответ
-        download_lib() {
-          local file=$1
-          local url=$2
-          echo "Downloading $file from $url..."
-          # Используем -f чтобы curl падал при 404, и -L для редиректов
-          if curl -L -f -o "lib/$file" "$url"; then
-            # Проверяем, не скачали ли мы HTML вместо JAR
-            if grep -q "<!DOCTYPE html" "lib/$file" || grep -q "<html" "lib/$file"; then
-              echo "Error: $url returned HTML instead of JAR"
-              rm "lib/$file"
-              return 1
-            fi
-            # Проверяем минимальный размер (JAR должен быть > 40kb)
-             local size=$(stat -c%s "lib/$file")
-             if [ $size -lt 40000 ]; then
-              echo "Error: $file is too small ($size bytes), probably invalid"
-              rm "lib/$file"
-              return 1
-            fi
-            echo "Successfully downloaded $file ($size bytes)"
-            return 0
-          fi
-          return 1
-        }
-
-        # Прямые ссылки на Maven Central (наиболее надежный источник)
-        URLS_MIDP=(
-          "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar"
-          "https://repo.maven.apache.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar"
-        )
-
-        URLS_CLDC=(
-          "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar"
-          "https://repo.maven.apache.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar"
-        )
-
-        SUCCESS_MIDP=false
-        for url in "${URLS_MIDP[@]}"; do
-          if download_lib "midpapi20.jar" "$url"; then
-            SUCCESS_MIDP=true
-            break
-          fi
-        done
-
-        SUCCESS_CLDC=false
-        for url in "${URLS_CLDC[@]}"; do
-          if download_lib "cldcapi11.jar" "$url"; then
-            SUCCESS_CLDC=true
-            break
-          fi
-        done
-
-        if [ "$SUCCESS_MIDP" = false ] || [ "$SUCCESS_CLDC" = false ]; then
-          echo "FATAL: Failed to download valid J2ME libraries from all sources!"
-          exit 1
-        fi
-        ls -l lib/
-
-    - name: Build
-      run: |
-        mkdir -p classes
-        # Ищем файл TelegramClient.java в любой подпапке (на случай если структура на GitHub отличается)
-        SOURCE_PATH=$(find . -name "TelegramClient.java" | head -n 1)
-        if [ -z "$SOURCE_PATH" ]; then
-          echo "Error: TelegramClient.java not found!"
-          exit 1
-        fi
-        echo "Compiling $SOURCE_PATH..."
-        javac -source 1.3 -target 1.3 -encoding UTF-8 \
-              -bootclasspath lib/midpapi20.jar:lib/cldcapi11.jar \
-              -d classes "$SOURCE_PATH"
-
-    - name: Package
-      run: |
-        mkdir -p META-INF
-        # Пытаемся найти существующий манифест
-        MANIFEST_PATH=$(find . -name "MANIFEST.MF" | head -n 1)
-        if [ -n "$MANIFEST_PATH" ]; then
-          cp "$MANIFEST_PATH" META-INF/MANIFEST.MF
-        else
-          echo "MIDlet-Name: Telegram" > META-INF/MANIFEST.MF
-          echo "MIDlet-Version: 1.0.0" >> META-INF/MANIFEST.MF
-          echo "MIDlet-Vendor: Trae" >> META-INF/MANIFEST.MF
-          echo "MIDlet-1: Telegram, , TelegramClient" >> META-INF/MANIFEST.MF
-          echo "MicroEdition-Profile: MIDP-2.0" >> META-INF/MANIFEST.MF
-          echo "MicroEdition-Configuration: CLDC-1.1" >> META-INF/MANIFEST.MF
-        fi
-        jar cvfm TelegramClient.jar META-INF/MANIFEST.MF -C classes .
-
-    - name: Upload
-      uses: actions/upload-artifact@v4
-      with:
-        name: TelegramClient-JAR
+name: Build J2ME JAR 
+  
+on: 
+  push: 
+    branches: [ main ] 
+  workflow_dispatch: 
+  
+jobs: 
+  build: 
+    runs-on: ubuntu-latest 
+  
+    steps: 
+    - uses: actions/checkout@v4 
+  
+    - name: Set up JDK 8 
+      uses: actions/setup-java@v4 
+      with: 
+        java-version: '8' 
+        distribution: 'temurin' 
+  
+    - name: Get Libraries 
+      run: | 
+        mkdir -p lib 
+         
+        # Функция для скачивания с жесткой проверкой 
+        download_lib() { 
+          local file=$1 
+          local url=$2 
+          echo "Trying $url..." 
+          curl -L -f -o "lib/$file" "$url" 
+          # Проверяем, что это не HTML страница (404) и файл открывается как zip 
+          if unzip -t "lib/$file" > /dev/null 2>&1; then 
+            echo "Successfully downloaded valid $file" 
+            return 0 
+          else 
+            echo "Invalid file from $url" 
+            rm -f "lib/$file" 
+            return 1 
+          fi 
+        } 
+  
+        # Ссылки на Maven Central (самые стабильные) + резерв 
+        URLS_MIDP=( 
+          "https://repo1.maven.org/maven2/org/microemu/midpapi20/2.0.4/midpapi20-2.0.4.jar" 
+          "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/midpapi20.jar" 
+        ) 
+         
+        URLS_CLDC=( 
+          "https://repo1.maven.org/maven2/org/microemu/cldcapi11/2.0.4/cldcapi11-2.0.4.jar" 
+          "https://raw.githubusercontent.com/the-m-project/j2me-sdk/master/lib/cldcapi11.jar" 
+        ) 
+  
+        for url in "${URLS_MIDP[@]}"; do download_lib "midpapi20.jar" "$url" && break; done 
+        for url in "${URLS_CLDC[@]}"; do download_lib "cldcapi11.jar" "$url" && break; done 
+  
+        if [ ! -f "lib/midpapi20.jar" ] || [ ! -f "lib/cldcapi11.jar" ]; then 
+          echo "ERROR: Could not download J2ME libraries!" 
+          exit 1 
+        fi 
+  
+    - name: Build 
+      run: | 
+        mkdir -p classes 
+        SOURCE_PATH=$(find . -name "TelegramClient.java" | head -n 1) 
+        echo "Compiling $SOURCE_PATH..." 
+        javac -source 1.3 -target 1.3 -encoding UTF-8 \ 
+              -bootclasspath lib/midpapi20.jar:lib/cldcapi11.jar \ 
+              -d classes "$SOURCE_PATH" 
+  
+    - name: Package 
+      run: | 
+        mkdir -p META-INF 
+        # Создаем чистый манифест, чтобы точно не было ошибок 
+        cat <<EOT > META-INF/MANIFEST.MF 
+        MIDlet-Name: Telegram 
+        MIDlet-Version: 1.0.0 
+        MIDlet-Vendor: Trae 
+        MIDlet-1: Telegram, , TelegramClient 
+        MicroEdition-Profile: MIDP-2.0 
+        MicroEdition-Configuration: CLDC-1.1 
+        EOT 
+        jar cvfm TelegramClient.jar META-INF/MANIFEST.MF -C classes . 
+  
+    - name: Upload 
+      uses: actions/upload-artifact@v4 
+      with: 
+        name: TelegramClient-JAR 
         path: TelegramClient.jar
