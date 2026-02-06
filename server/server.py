@@ -22,8 +22,25 @@ async def get_client():
         
         if not client.is_connected():
             print("[***] Connecting to Telegram...")
-            await client.connect()
-            print("[***] Connected!")
+            try:
+                await client.connect()
+                print("[***] Connected!")
+            except Exception as e:
+                print(f"[!!!] Connection failed: {e}")
+                # Если сессия повреждена, можно попробовать пересоздать клиент
+                if "database is locked" in str(e).lower():
+                    client = TelegramClient('session_name', config.API_ID, config.API_HASH)
+                    await client.connect()
+        
+        # Проверка на дисконнект в процессе работы
+        try:
+            if not await client.is_user_authorized():
+                pass # Это нормально для неавторизованных
+        except Exception as e:
+            if "not connected" in str(e).lower():
+                print("[***] Client disconnected unexpectedly, reconnecting...")
+                await client.connect()
+                
         return client
 
 @app.before_serving
@@ -41,6 +58,7 @@ async def shutdown():
 async def log_request_info():
     print(f"\n[>>>] Incoming {request.method} request to {request.path}")
     print(f"      From IP: {request.remote_addr}")
+    print(f"      User-Agent: {request.headers.get('User-Agent')}")
 
 @app.after_request
 async def add_header(response):
@@ -157,12 +175,32 @@ async def get_photo():
 @app.route('/api/send', methods=['GET', 'POST'])
 @app.route('/send', methods=['GET', 'POST'])
 async def send_message():
-    chat_id = int(request.args.get('id'))
-    text = request.args.get('text')
-    c = await get_client()
-    if not await c.is_user_authorized(): return jsonify({"status": "unauthorized"})
-    await c.send_message(chat_id, text)
-    return jsonify({"status": "ok"})
+    try:
+        chat_id = int(request.args.get('id'))
+        text = request.args.get('text')
+        
+        # Декодируем %uXXXX если пришло в таком формате
+        if text and "%u" in text:
+            import urllib.parse
+            # Заменяем %uXXXX на \uXXXX для корректного декодирования
+            parts = text.split('%u')
+            new_text = parts[0]
+            for p in parts[1:]:
+                if len(p) >= 4:
+                    hex_val = p[:4]
+                    new_text += chr(int(hex_val, 16)) + p[4:]
+                else:
+                    new_text += "%u" + p
+            text = new_text
+
+        print(f"[>>>] Sending message to {chat_id}: {text}")
+        c = await get_client()
+        if not await c.is_user_authorized(): return jsonify({"status": "unauthorized"})
+        await c.send_message(chat_id, text)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        print(f"[!!!] Error sending message: {e}")
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route('/api/react', methods=['GET'])
 @app.route('/react', methods=['GET'])

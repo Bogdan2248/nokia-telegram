@@ -96,12 +96,14 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         } else if (c == loginCmd) {
             new Thread() { public void run() { login(); } }.start();
         } else if (c == refreshChatsCmd || (c == List.SELECT_COMMAND && d == chatList)) {
-            if (c == List.SELECT_COMMAND) {
+            if (d == chatList && c == List.SELECT_COMMAND) {
                 String selected = chatList.getString(chatList.getSelectedIndex());
                 int start = selected.lastIndexOf('[') + 1;
                 int end = selected.lastIndexOf(']');
-                currentChatId = Long.parseLong(selected.substring(start, end));
-                new Thread() { public void run() { loadMessages(currentChatId); } }.start();
+                if (start > 0 && end > start) {
+                    currentChatId = Long.parseLong(selected.substring(start, end));
+                    new Thread() { public void run() { loadMessages(currentChatId); } }.start();
+                }
             } else {
                 new Thread() { public void run() { loadChats(); } }.start();
             }
@@ -348,6 +350,10 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 sb.append(c);
             } else if (c == ' ') {
                 sb.append("+");
+            } else if (c >= 0x0400 && c <= 0x04FF) { // Кириллица
+                String hex = Integer.toHexString(c);
+                // Для кириллицы в URL обычно нужно UTF-8, но простейший вариант для сервера:
+                sb.append("%u0" + hex.toUpperCase());
             } else {
                 String hex = Integer.toHexString(c);
                 if (hex.length() == 1) sb.append("%0" + hex.toUpperCase());
