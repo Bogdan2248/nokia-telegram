@@ -250,12 +250,19 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     }
 
     private String urlEncode(String s) {
+        if (s == null) return "";
         StringBuffer sb = new StringBuffer();
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (c == ' ') sb.append("%20");
-            else if (c == '+') sb.append("%2B");
-            else sb.append(c);
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '*') {
+                sb.append(c);
+            } else if (c == ' ') {
+                sb.append("+");
+            } else {
+                String hex = Integer.toHexString(c);
+                if (hex.length() == 1) sb.append("%0" + hex.toUpperCase());
+                else sb.append("%" + hex.toUpperCase());
+            }
         }
         return sb.toString();
     }
@@ -277,6 +284,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     private String httpGet(String url) {
         HttpConnection hc = null;
         InputStream is = null;
+        ByteArrayOutputStream baos = null;
         try {
             hc = (HttpConnection) Connector.open(url);
             int rc = hc.getResponseCode();
@@ -284,16 +292,21 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                 return "HTTP Error: " + rc;
             }
             is = hc.openInputStream();
-            StringBuffer sb = new StringBuffer();
-            int ch;
-            while ((ch = is.read()) != -1) {
-                sb.append((char) ch);
+            baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[1024];
+            int len;
+            while ((len = is.read(buffer)) != -1) {
+                baos.write(buffer, 0, len);
             }
-            return sb.toString();
+            return new String(baos.toByteArray(), "UTF-8");
         } catch (Exception e) {
             return "Conn Error: " + e.getMessage() + "\nCheck IP/Firewall!\nURL: " + url;
         } finally {
-            try { if (is != null) is.close(); if (hc != null) hc.close(); } catch (Exception e) {}
+            try { 
+                if (baos != null) baos.close();
+                if (is != null) is.close(); 
+                if (hc != null) hc.close(); 
+            } catch (Exception e) {}
         }
     }
 

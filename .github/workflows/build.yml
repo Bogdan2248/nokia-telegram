@@ -60,14 +60,12 @@ jobs:
     - name: Package 
       run: | 
         mkdir -p classes/META-INF 
-        cat > classes/META-INF/MANIFEST.MF <<EOF
-MIDlet-Name: Telegram
-MIDlet-Version: 1.0.0
-MIDlet-Vendor: Trae
-MIDlet-1: Telegram, , TelegramClient
-MicroEdition-Profile: MIDP-2.0
-MicroEdition-Configuration: CLDC-1.1
-EOF
+        echo "MIDlet-Name: Telegram" > classes/META-INF/MANIFEST.MF
+        echo "MIDlet-Version: 1.0.0" >> classes/META-INF/MANIFEST.MF
+        echo "MIDlet-Vendor: Trae" >> classes/META-INF/MANIFEST.MF
+        echo "MIDlet-1: Telegram, , TelegramClient" >> classes/META-INF/MANIFEST.MF
+        echo "MicroEdition-Profile: MIDP-2.0" >> classes/META-INF/MANIFEST.MF
+        echo "MicroEdition-Configuration: CLDC-1.1" >> classes/META-INF/MANIFEST.MF
         cd classes
         jar cvfm ../TelegramClient.jar META-INF/MANIFEST.MF .
         cd ..
