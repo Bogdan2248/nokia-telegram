@@ -272,6 +272,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         InputStream is = null;
         try {
             hc = (HttpConnection) Connector.open(url);
+            hc.setRequestProperty("bypass-tunnel-reminder", "true");
             is = hc.openInputStream();
             return Image.createImage(is);
         } catch (Exception e) {
@@ -287,6 +288,8 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         ByteArrayOutputStream baos = null;
         try {
             hc = (HttpConnection) Connector.open(url);
+            hc.setRequestProperty("bypass-tunnel-reminder", "true");
+            hc.setRequestProperty("User-Agent", "NokiaC5-00/061.005");
             int rc = hc.getResponseCode();
             if (rc != HttpConnection.HTTP_OK) {
                 return "HTTP Error: " + rc;
