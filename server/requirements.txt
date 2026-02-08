@@ -1,3 +1,4 @@
-flask
+quart
 telethon
 pillow
+urllib3

@@ -1,11 +1,27 @@
+# Python
 .venv/
 .idea/
 __pycache__/
-*.class
-*.jar
 *.pyc
+*.pyo
+*.pyd
+.env
+*.session
+*.session-journal
+server/*.session
+server/*.session-journal
+
+# Java / J2ME
+*.class
 classes/
-dist/
-build/
 bin/
-lib/
+build/
+dist/
+lib/*.jar
+!lib/jsr75.jar
+*.jar
+*.jad
+
+# OS
+.DS_Store
+Thumbs.db
