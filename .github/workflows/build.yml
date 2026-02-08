@@ -1,3 +1,4 @@
+# ---Создал Bogdan2248---
 name: Build J2ME JAR 
   
 on: 
@@ -63,7 +64,7 @@ jobs:
         mkdir -p classes/META-INF 
         echo "MIDlet-Name: Telegram" > classes/META-INF/MANIFEST.MF
         echo "MIDlet-Version: 1.0.0" >> classes/META-INF/MANIFEST.MF
-        echo "MIDlet-Vendor: Trae" >> classes/META-INF/MANIFEST.MF
+        echo "MIDlet-Vendor: Bogdan2248" >> classes/META-INF/MANIFEST.MF
         echo "MIDlet-1: Telegram, , TelegramClient" >> classes/META-INF/MANIFEST.MF
         echo "MicroEdition-Profile: MIDP-2.0" >> classes/META-INF/MANIFEST.MF
         echo "MicroEdition-Configuration: CLDC-1.1" >> classes/META-INF/MANIFEST.MF

@@ -1,3 +1,4 @@
+# ---Создал Bogdan2248---
 import asyncio
 import io
 import os
