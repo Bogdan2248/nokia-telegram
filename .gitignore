@@ -6,7 +6,7 @@ __pycache__/
 *.pyo
 *.pyd
 .env
-server/config.py
+# server/config.py  <-- Убрал из игнора, чтобы выложить шаблон
 server/config.py.backup
 *.session
 *.session-journal

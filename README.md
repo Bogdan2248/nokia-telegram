@@ -15,9 +15,8 @@
 Сервер выступает в роли прокси-шлюза между Telegram API и Java-клиентом. Рекомендуется запускать в **PyCharm**, **VS Code** или напрямую через терминал (CMD/PowerShell).
 1. Перейдите в папку `server`.
 2. Установите зависимости: `pip install -r requirements.txt`.
-3. Создайте файл `config.py` в папке `server`, скопировав содержимое из `config.py.example`.
-4. Впишите ваши `API_ID` и `API_HASH` (их нужно получить на https://my.telegram.org) в созданный `config.py`.
-5. Запустите: `python server.py`.
+3. Откройте файл `config.py` в папке `server` и впишите ваши `API_ID` и `API_HASH` (их нужно получить на https://my.telegram.org).
+4. Запустите: `python server.py`.
 
 ### 2. Создание туннеля (Serveo)
 Чтобы телефон мог подключиться к вашему серверу через интернет, используйте SSH-туннель:
