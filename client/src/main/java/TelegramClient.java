@@ -8,26 +8,28 @@ import java.util.*;
 
 public class TelegramClient extends MIDlet implements CommandListener, Runnable {
     private Display display;
-    private Form authForm, messageForm;
+    private Form authForm, messageForm, loadingForm;
     private TextField phoneField, codeField, serverField, replyField;
     private Command sendCodeCmd, loginCmd, refreshChatsCmd, sendMsgCmd, backCmd, exitCmd;
     private List chatList;
     private long currentChatId;
     private long lastMsgId = 0;
     private boolean isAutoRefreshRunning = false;
+    private boolean isStarted = false;
     private String lastMessagesJson = "";
     private static final String RS_NAME = "tg_settings";
 
     public TelegramClient() {
         display = Display.getDisplay(this);
         
+        loadingForm = new Form("Telegram");
+        loadingForm.append(new StringItem(null, "Loading... Please wait."));
+        
         authForm = new Form("Telegram Login");
         phoneField = new TextField("Phone Number:", "+", 20, TextField.PHONENUMBER);
         codeField = new TextField("Auth Code:", "", 10, TextField.NUMERIC);
         serverField = new TextField("Server URL:", "http://", 500, TextField.URL);
         
-        loadSettings();
-
         sendCodeCmd = new Command("Send Code", Command.OK, 1);
         loginCmd = new Command("Login", Command.OK, 2);
         refreshChatsCmd = new Command("Refresh", Command.SCREEN, 3);
@@ -69,7 +71,9 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             rs = RecordStore.openRecordStore(RS_NAME, true);
             if (rs.getNumRecords() > 0) {
                 byte[] b = rs.getRecord(1);
-                serverField.setString(new String(b));
+                if (b != null) {
+                    serverField.setString(new String(b));
+                }
             }
         } catch (Exception e) {}
         finally {
@@ -91,16 +95,32 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     }
 
     protected void startApp() {
-        if (serverField.getString().length() > 8) {
-            display.setCurrent(chatList);
-            new Thread() { public void run() { loadChats(); } }.start();
-        } else {
-            display.setCurrent(authForm);
-        }
-        
-        if (!isAutoRefreshRunning) {
-            isAutoRefreshRunning = true;
-            new Thread(this).start();
+        if (!isStarted) {
+            isStarted = true;
+            display.setCurrent(loadingForm);
+            
+            new Thread() {
+                public void run() {
+                    try {
+                        loadSettings();
+                        Thread.sleep(500); // Даем время системе инициализироваться
+                        
+                        if (serverField.getString().length() > 8) {
+                            display.setCurrent(chatList);
+                            loadChats();
+                        } else {
+                            display.setCurrent(authForm);
+                        }
+                        
+                        if (!isAutoRefreshRunning) {
+                            isAutoRefreshRunning = true;
+                            new Thread(TelegramClient.this).start();
+                        }
+                    } catch (Exception e) {
+                        display.setCurrent(authForm);
+                    }
+                }
+            }.start();
         }
     }
 
@@ -178,46 +198,42 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     }
 
     private void loadChats() {
-        new Thread() {
-            public void run() {
-                try {
-                    int oldIdx = chatList.getSelectedIndex();
-                    String res = httpGet(getBaseUrl() + "/chats");
-                    if (res == null) return;
-                    
-                    chatList.deleteAll();
-                    int searchIdx = 0;
-                    while (true) {
-                        int namePos = res.indexOf("\"name\"", searchIdx);
-                        if (namePos == -1) break;
-                        
-                        String name = getJsonValue(res, "name", namePos);
-                        String id = getJsonValue(res, "id", namePos);
-                        String unread = getJsonValue(res, "unread", namePos);
-                        
-                        if (name != null) {
-                            name = decodeUnicode(name);
-                            String label = name + (unread != null && !"0".equals(unread) ? " [" + unread + "]" : "") + (id != null ? " [" + id + "]" : "");
-                            chatList.append(label, null);
-                        }
-                        
-                        int nextObj = res.indexOf("}", namePos);
-                        if (nextObj == -1) break;
-                        searchIdx = nextObj;
-                    }
-                    
-                    if (oldIdx != -1 && oldIdx < chatList.size()) {
-                        chatList.setSelectedIndex(oldIdx, true);
-                    }
-                    
-                    if (display.getCurrent() != chatList && display.getCurrent() != authForm) {
-                        display.setCurrent(chatList);
-                    }
-                } catch (Exception e) {
-                    showAlert("Load Error", e.getMessage());
+        try {
+            int oldIdx = chatList.getSelectedIndex();
+            String res = httpGet(getBaseUrl() + "/chats");
+            if (res == null) return;
+            
+            chatList.deleteAll();
+            int searchIdx = 0;
+            while (true) {
+                int namePos = res.indexOf("\"name\"", searchIdx);
+                if (namePos == -1) break;
+                
+                String name = getJsonValue(res, "name", namePos);
+                String id = getJsonValue(res, "id", namePos);
+                String unread = getJsonValue(res, "unread", namePos);
+                
+                if (name != null) {
+                    name = decodeUnicode(name);
+                    String label = name + (unread != null && !"0".equals(unread) ? " [" + unread + "]" : "") + (id != null ? " [" + id + "]" : "");
+                    chatList.append(label, null);
                 }
+                
+                int nextObj = res.indexOf("}", namePos);
+                if (nextObj == -1) break;
+                searchIdx = nextObj;
             }
-        }.start();
+            
+            if (oldIdx != -1 && oldIdx < chatList.size()) {
+                chatList.setSelectedIndex(oldIdx, true);
+            }
+            
+            if (display.getCurrent() != chatList && display.getCurrent() != authForm) {
+                display.setCurrent(chatList);
+            }
+        } catch (Exception e) {
+            showAlert("Load Error", e.getMessage());
+        }
     }
 
     private String getJsonValue(String json, String key, int startIdx) {
