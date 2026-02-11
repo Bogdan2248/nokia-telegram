@@ -1,4 +1,4 @@
-MIDlet-Name: TelegramClient
+MIDlet-Name: Telegram
 MIDlet-Version: 1.0.0
 MIDlet-Vendor: Bogdan2248
 MIDlet-1: Telegram, , TelegramClient
