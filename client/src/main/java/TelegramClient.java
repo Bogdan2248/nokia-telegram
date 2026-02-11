@@ -8,25 +8,18 @@ import java.util.*;
 
 public class TelegramClient extends MIDlet implements CommandListener, Runnable {
     private Display display;
-    private Form authForm, messageForm, loadingForm;
+    private Form authForm, messageForm;
     private TextField phoneField, codeField, serverField, replyField;
     private Command sendCodeCmd, loginCmd, refreshChatsCmd, sendMsgCmd, backCmd, exitCmd;
     private List chatList;
     private long currentChatId;
     private long lastMsgId = 0;
     private boolean isAutoRefreshRunning = false;
-    private boolean isStarted = false;
     private String lastMessagesJson = "";
     private static final String RS_NAME = "tg_settings";
 
-    private StringItem loadingStatus;
-
     public TelegramClient() {
         display = Display.getDisplay(this);
-        
-        loadingForm = new Form("Telegram");
-        loadingStatus = new StringItem(null, "Initializing...");
-        loadingForm.append(loadingStatus);
         
         authForm = new Form("Telegram Login");
         phoneField = new TextField("Phone Number:", "+", 20, TextField.PHONENUMBER);
@@ -68,84 +61,11 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         messageForm.setCommandListener(this);
     }
 
-    private void loadSettings() {
-        RecordStore rs = null;
-        try {
-            updateStatus("Opening RecordStore...");
-            rs = RecordStore.openRecordStore(RS_NAME, true);
-            updateStatus("RS opened, records: " + rs.getNumRecords());
-            if (rs.getNumRecords() > 0) {
-                byte[] b = rs.getRecord(1);
-                if (b != null) {
-                    serverField.setString(new String(b));
-                    updateStatus("Settings loaded.");
-                }
-            } else {
-                updateStatus("No saved settings.");
-            }
-        } catch (Exception e) {
-            updateStatus("RMS Error: " + e.getMessage());
-        }
-        finally {
-            try { if (rs != null) rs.closeRecordStore(); } catch (Exception e) {}
-        }
-    }
-
-    private void saveSettings() {
-        RecordStore rs = null;
-        try {
-            RecordStore.deleteRecordStore(RS_NAME);
-            rs = RecordStore.openRecordStore(RS_NAME, true);
-            byte[] b = serverField.getString().getBytes();
-            rs.addRecord(b, 0, b.length);
-        } catch (Exception e) {}
-        finally {
-            try { if (rs != null) rs.closeRecordStore(); } catch (Exception e) {}
-        }
-    }
-
     protected void startApp() {
-        if (!isStarted) {
-            isStarted = true;
-            display.setCurrent(loadingForm);
-            
-            new Thread() {
-                public void run() {
-                    try {
-                        updateStatus("Reading settings...");
-                        loadSettings();
-                        Thread.sleep(1000);
-                        
-                        String url = serverField.getString();
-                        updateStatus("URL: " + (url.length() > 0 ? url : "empty"));
-                        Thread.sleep(1000);
-                        
-                        if (url.length() > 8) {
-                            updateStatus("Connecting to server...");
-                            display.setCurrent(chatList);
-                            loadChats();
-                        } else {
-                            updateStatus("Opening Login...");
-                            display.setCurrent(authForm);
-                        }
-                        
-                        if (!isAutoRefreshRunning) {
-                            isAutoRefreshRunning = true;
-                            new Thread(TelegramClient.this).start();
-                        }
-                    } catch (Exception e) {
-                        updateStatus("Error: " + e.getMessage());
-                        try { Thread.sleep(3000); } catch (Exception ex) {}
-                        display.setCurrent(authForm);
-                    }
-                }
-            }.start();
-        }
+        display.setCurrent(authForm);
     }
 
     private void updateStatus(final String text) {
-        // В J2ME изменения GUI должны быть безопасными, но StringItem.setText обычно потокобезопасен
-        loadingStatus.setText(text);
         System.out.println("[DEBUG] " + text);
     }
 
@@ -166,10 +86,8 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
 
     public void commandAction(Command c, Displayable d) {
         if (c == sendCodeCmd) {
-            saveSettings();
             new Thread() { public void run() { sendCode(); } }.start();
         } else if (c == loginCmd) {
-            saveSettings();
             new Thread() { public void run() { login(); } }.start();
         } else if (c == refreshChatsCmd || (c == List.SELECT_COMMAND && d == chatList)) {
             if (d == chatList && c == List.SELECT_COMMAND) {
