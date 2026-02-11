@@ -1,6 +1,6 @@
 MIDlet-Name: Telegram
 MIDlet-Version: 1.0.1
 MIDlet-Vendor: Bogdan2248
-MIDlet-1: Telegram, , TelegramClient
+MIDlet-1: Telegram, , telegram.TelegramClient
 MicroEdition-Profile: MIDP-2.0
 MicroEdition-Configuration: CLDC-1.1

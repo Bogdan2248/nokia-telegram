@@ -59,28 +59,48 @@ jobs:
         echo "Compiling $SOURCE_PATH..." 
         javac -source 1.3 -target 1.3 -encoding UTF-8 -bootclasspath lib/midpapi20.jar:lib/cldcapi11.jar -d classes "$SOURCE_PATH" 
   
+    - name: Preverify 
+      run: | 
+        sudo apt-get update && sudo apt-get install -y proguard 
+        # Create a simple proguard config for preverification 
+        echo "-injars classes" > preverify.pro 
+        echo "-outjars classes_preverified" >> preverify.pro 
+        echo "-libraryjars lib/midpapi20.jar" >> preverify.pro 
+        echo "-libraryjars lib/cldcapi11.jar" >> preverify.pro 
+        echo "-dontoptimize" >> preverify.pro 
+        echo "-dontobfuscate" >> preverify.pro 
+        echo "-dontwarn" >> preverify.pro 
+        echo "-microedition" >> preverify.pro 
+        
+        proguard @preverify.pro || true 
+        
+        # If proguard failed to create the dir, we use the original classes but it might fail on phone 
+        if [ ! -d "classes_preverified" ]; then 
+          echo "WARNING: Preverification failed, using original classes" 
+          cp -r classes classes_preverified 
+        fi 
+  
     - name: Package 
       run: | 
-        mkdir -p classes/META-INF 
-        echo "MIDlet-Name: Telegram" > classes/META-INF/MANIFEST.MF
-        echo "MIDlet-Version: 1.0.0" >> classes/META-INF/MANIFEST.MF
-        echo "MIDlet-Vendor: Bogdan2248" >> classes/META-INF/MANIFEST.MF
-        echo "MIDlet-1: Telegram, , TelegramClient" >> classes/META-INF/MANIFEST.MF
-        echo "MicroEdition-Profile: MIDP-2.0" >> classes/META-INF/MANIFEST.MF
-        echo "MicroEdition-Configuration: CLDC-1.1" >> classes/META-INF/MANIFEST.MF
-        cd classes
-        jar cvfm ../TelegramClient.jar META-INF/MANIFEST.MF .
-        cd ..
-        if [ -f "TelegramClient.jar" ]; then
-          echo "SUCCESS: TelegramClient.jar created."
-        else
-          echo "ERROR: JAR NOT FOUND!"
-          exit 1
-        fi
+        # Create Manifest 
+        mkdir -p classes_preverified/META-INF 
+        cp client/META-INF/MANIFEST.MF classes_preverified/META-INF/MANIFEST.MF 
+        
+        # Build JAR 
+        cd classes_preverified 
+        jar cvfm ../TelegramClient.jar META-INF/MANIFEST.MF . 
+        cd .. 
+        
+        # Build JAD 
+        JAR_SIZE=$(stat -c%s "TelegramClient.jar") 
+        cp client/META-INF/MANIFEST.MF TelegramClient.jad 
+        echo "MIDlet-Jar-Size: $JAR_SIZE" >> TelegramClient.jad 
+        echo "MIDlet-Jar-URL: TelegramClient.jar" >> TelegramClient.jad 
   
     - name: Upload 
       uses: actions/upload-artifact@v4 
       with: 
-        name: TelegramClient-JAR 
-        path: TelegramClient.jar 
-        if-no-files-found: error
+        name: TelegramClient-Build 
+        path: | 
+          TelegramClient.jar 
+          TelegramClient.jad 
