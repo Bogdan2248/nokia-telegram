@@ -19,11 +19,14 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     private String lastMessagesJson = "";
     private static final String RS_NAME = "tg_settings";
 
+    private StringItem loadingStatus;
+
     public TelegramClient() {
         display = Display.getDisplay(this);
         
         loadingForm = new Form("Telegram");
-        loadingForm.append(new StringItem(null, "Loading... Please wait."));
+        loadingStatus = new StringItem(null, "Initializing...");
+        loadingForm.append(loadingStatus);
         
         authForm = new Form("Telegram Login");
         phoneField = new TextField("Phone Number:", "+", 20, TextField.PHONENUMBER);
@@ -68,14 +71,21 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     private void loadSettings() {
         RecordStore rs = null;
         try {
+            updateStatus("Opening RecordStore...");
             rs = RecordStore.openRecordStore(RS_NAME, true);
+            updateStatus("RS opened, records: " + rs.getNumRecords());
             if (rs.getNumRecords() > 0) {
                 byte[] b = rs.getRecord(1);
                 if (b != null) {
                     serverField.setString(new String(b));
+                    updateStatus("Settings loaded.");
                 }
+            } else {
+                updateStatus("No saved settings.");
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            updateStatus("RMS Error: " + e.getMessage());
+        }
         finally {
             try { if (rs != null) rs.closeRecordStore(); } catch (Exception e) {}
         }
@@ -102,13 +112,20 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
             new Thread() {
                 public void run() {
                     try {
+                        updateStatus("Reading settings...");
                         loadSettings();
-                        Thread.sleep(500); // Даем время системе инициализироваться
+                        Thread.sleep(1000);
                         
-                        if (serverField.getString().length() > 8) {
+                        String url = serverField.getString();
+                        updateStatus("URL: " + (url.length() > 0 ? url : "empty"));
+                        Thread.sleep(1000);
+                        
+                        if (url.length() > 8) {
+                            updateStatus("Connecting to server...");
                             display.setCurrent(chatList);
                             loadChats();
                         } else {
+                            updateStatus("Opening Login...");
                             display.setCurrent(authForm);
                         }
                         
@@ -117,11 +134,19 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                             new Thread(TelegramClient.this).start();
                         }
                     } catch (Exception e) {
+                        updateStatus("Error: " + e.getMessage());
+                        try { Thread.sleep(3000); } catch (Exception ex) {}
                         display.setCurrent(authForm);
                     }
                 }
             }.start();
         }
+    }
+
+    private void updateStatus(final String text) {
+        // В J2ME изменения GUI должны быть безопасными, но StringItem.setText обычно потокобезопасен
+        loadingStatus.setText(text);
+        System.out.println("[DEBUG] " + text);
     }
 
     public void run() {
