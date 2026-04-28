@@ -93,7 +93,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
     protected void startApp() {
         if (serverField.getString().length() > 8) {
             display.setCurrent(chatList);
-            new Thread() { public void run() { loadChats(); } }.start();
+            loadChats();
         } else {
             display.setCurrent(authForm);
         }
@@ -137,7 +137,7 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                     new Thread() { public void run() { loadMessages(currentChatId); } }.start();
                 }
             } else {
-                new Thread() { public void run() { loadChats(); } }.start();
+                loadChats();
             }
         } else if (c.getLabel().equals("Settings")) {
             display.setCurrent(authForm);
@@ -186,24 +186,18 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                     if (res == null) return;
                     
                     chatList.deleteAll();
-                    int searchIdx = 0;
-                    while (true) {
-                        int namePos = res.indexOf("\"name\"", searchIdx);
-                        if (namePos == -1) break;
-                        
-                        String name = getJsonValue(res, "name", namePos);
-                        String id = getJsonValue(res, "id", namePos);
-                        String unread = getJsonValue(res, "unread", namePos);
+                    Vector objects = extractTopLevelObjects(res);
+                    for (int i = 0; i < objects.size(); i++) {
+                        String obj = (String) objects.elementAt(i);
+                        String name = getJsonValue(obj, "name", 0);
+                        String id = getJsonValue(obj, "id", 0);
+                        String unread = getJsonValue(obj, "unread", 0);
                         
                         if (name != null) {
                             name = decodeUnicode(name);
                             String label = name + (unread != null && !"0".equals(unread) ? " [" + unread + "]" : "") + (id != null ? " [" + id + "]" : "");
                             chatList.append(label, null);
                         }
-                        
-                        int nextObj = res.indexOf("}", namePos);
-                        if (nextObj == -1) break;
-                        searchIdx = nextObj;
                     }
                     
                     if (oldIdx != -1 && oldIdx < chatList.size()) {
@@ -220,29 +214,61 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         }.start();
     }
 
+    private Vector extractTopLevelObjects(String jsonArray) {
+        Vector objects = new Vector();
+        if (jsonArray == null) return objects;
+        boolean inString = false;
+        int depth = 0;
+        int objStart = -1;
+        for (int i = 0; i < jsonArray.length(); i++) {
+            char ch = jsonArray.charAt(i);
+            if (ch == '\"') {
+                int backslashCount = 0;
+                for (int j = i - 1; j >= 0 && jsonArray.charAt(j) == '\\'; j--) backslashCount++;
+                if ((backslashCount % 2) == 0) inString = !inString;
+            }
+            if (inString) continue;
+            if (ch == '{') {
+                if (depth == 0) objStart = i;
+                depth++;
+            } else if (ch == '}') {
+                depth--;
+                if (depth == 0 && objStart != -1) {
+                    objects.addElement(jsonArray.substring(objStart, i + 1));
+                    objStart = -1;
+                }
+            }
+        }
+        return objects;
+    }
+
     private String getJsonValue(String json, String key, int startIdx) {
         String searchKey = "\"" + key + "\":";
         int keyIdx = json.indexOf(searchKey, startIdx);
         if (keyIdx == -1) return null;
         int valStart = keyIdx + searchKey.length();
-        while (valStart < json.length() && (json.charAt(valStart) == ' ' || json.charAt(valStart) == '\"')) {
+        while (valStart < json.length() && json.charAt(valStart) == ' ') {
             valStart++;
         }
-        
-        boolean isString = json.charAt(valStart - 1) == '\"';
+
+        if (valStart >= json.length()) return null;
+
+        boolean isString = json.charAt(valStart) == '\"';
+        if (isString) valStart++;
         int valEnd = -1;
-        
+
         if (isString) {
-            int current = valStart;
-            while (current < json.length()) {
-                int nextQuote = json.indexOf("\"", current);
-                if (nextQuote == -1) break;
-                // Проверяем, не экранирована ли кавычка
-                if (json.charAt(nextQuote - 1) != '\\') {
-                    valEnd = nextQuote;
-                    break;
+            for (int current = valStart; current < json.length(); current++) {
+                if (json.charAt(current) == '\"') {
+                    int backslashCount = 0;
+                    for (int i = current - 1; i >= valStart && json.charAt(i) == '\\'; i--) {
+                        backslashCount++;
+                    }
+                    if ((backslashCount % 2) == 0) {
+                        valEnd = current;
+                        break;
+                    }
                 }
-                current = nextQuote + 1;
             }
         } else {
             valEnd = json.indexOf(",", valStart);
@@ -318,17 +344,16 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         
         messageForm.deleteAll();
         try {
-            int searchIdx = 0;
-            while (true) {
-                String from = getJsonValue(res, "from", searchIdx);
-                if (from == null) break;
-                
-                int fromPos = res.indexOf("\"from\"", searchIdx);
-                String text = getJsonValue(res, "text", fromPos);
-                String msgIdStr = getJsonValue(res, "id", fromPos);
-                String hasPhotoStr = getJsonValue(res, "has_photo", fromPos);
+            Vector objects = extractTopLevelObjects(res);
+            for (int idx = 0; idx < objects.size(); idx++) {
+                String obj = (String) objects.elementAt(idx);
+                String from = getJsonValue(obj, "from", 0);
+                if (from == null) continue;
+                String text = getJsonValue(obj, "text", 0);
+                String msgIdStr = getJsonValue(obj, "id", 0);
+                String hasPhotoStr = getJsonValue(obj, "has_photo", 0);
                 // String reactions = getJsonValue(res, "reactions", fromPos); // Реакции удалены
-                String replyTo = getJsonValue(res, "reply_to", fromPos);
+                String replyTo = getJsonValue(obj, "reply_to", 0);
 
                 from = decodeUnicode(from);
                 text = decodeUnicode(text);
@@ -354,10 +379,6 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
                     messageForm.append(new StringItem(null, prefix + from + ": " + displayMsg));
                 }
                 messageForm.append(new StringItem(null, "--------------------"));
-
-                int nextObj = res.indexOf("}", fromPos);
-                if (nextObj == -1) break;
-                searchIdx = nextObj;
             }
             messageForm.append(replyField);
             if (display.getCurrent() != messageForm) {
@@ -372,13 +393,9 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
         String text = replyField.getString();
         if (text.length() > 0) {
             final String encodedText = urlEncode(text);
-            new Thread() {
-                public void run() {
-                    String url = getBaseUrl() + "/send?id=" + currentChatId + "&text=" + encodedText;
-                    httpGet(url);
-                    loadMessages(currentChatId);
-                }
-            }.start();
+            String url = getBaseUrl() + "/send?id=" + currentChatId + "&text=" + encodedText;
+            httpGet(url);
+            loadMessages(currentChatId);
             replyField.setString("");
         }
     }
@@ -461,7 +478,9 @@ public class TelegramClient extends MIDlet implements CommandListener, Runnable 
 
     private void showAlert(String title, String text) {
         Alert alert = new Alert(title, text, null, AlertType.INFO);
-        alert.setTimeout(Alert.FOREVER);
-        display.setCurrent(alert);
+        alert.setTimeout(3000);
+        Displayable next = display.getCurrent();
+        if (next == null) next = authForm;
+        display.setCurrent(alert, next);
     }
 }

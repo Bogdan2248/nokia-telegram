@@ -14,6 +14,15 @@ app = Quart(__name__)
 client = None
 client_lock = asyncio.Lock()
 
+def parse_int_arg(name):
+    value = request.args.get(name)
+    if value is None:
+        return None, jsonify({"status": "error", "message": f"Missing parameter: {name}"}), 400
+    try:
+        return int(value), None, None
+    except (TypeError, ValueError):
+        return None, jsonify({"status": "error", "message": f"Invalid parameter: {name}"}), 400
+
 async def get_client():
     global client
     async with client_lock:
@@ -96,7 +105,9 @@ async def get_chats():
 @app.route('/messages', methods=['GET'])
 async def get_messages():
     try:
-        chat_id = int(request.args.get('id'))
+        chat_id, err_resp, err_code = parse_int_arg('id')
+        if err_resp:
+            return err_resp, err_code
         c = await get_client()
         if not await c.is_user_authorized():
             return jsonify({"status": "unauthorized"})
@@ -159,8 +170,12 @@ async def get_messages():
 @app.route('/api/photo', methods=['GET'])
 @app.route('/photo', methods=['GET'])
 async def get_photo():
-    chat_id = int(request.args.get('chat_id'))
-    msg_id = int(request.args.get('msg_id'))
+    chat_id, err_resp, err_code = parse_int_arg('chat_id')
+    if err_resp:
+        return err_resp, err_code
+    msg_id, err_resp, err_code = parse_int_arg('msg_id')
+    if err_resp:
+        return err_resp, err_code
     c = await get_client()
     msg = await c.get_messages(chat_id, ids=msg_id)
     if not msg or not msg.photo: return "No photo", 404
@@ -180,12 +195,14 @@ async def get_photo():
 @app.route('/send', methods=['GET', 'POST'])
 async def send_message():
     try:
-        chat_id = int(request.args.get('id'))
+        chat_id, err_resp, err_code = parse_int_arg('id')
+        if err_resp:
+            return err_resp, err_code
         text = request.args.get('text')
         
         # Теперь используем стандартный unquote, так как клиент шлет UTF-8
         import urllib.parse
-        text = urllib.parse.unquote(text) if text else ""
+        text = urllib.parse.unquote_plus(text) if text else ""
 
         print(f"[>>>] Sending message to {chat_id}: {text}")
         c = await get_client()
@@ -209,7 +226,9 @@ async def send_message():
 @app.route('/upload', methods=['POST'])
 async def upload_photo():
     try:
-        chat_id = int(request.args.get('id'))
+        chat_id, err_resp, err_code = parse_int_arg('id')
+        if err_resp:
+            return err_resp, err_code
         files = await request.files
         if 'photo' not in files:
             return jsonify({"status": "error", "message": "No photo"}), 400
@@ -218,6 +237,8 @@ async def upload_photo():
         photo_bytes = photo.read()
         
         c = await get_client()
+        if not await c.is_user_authorized():
+            return jsonify({"status": "unauthorized"})
         await c.send_file(chat_id, photo_bytes)
         return "OK"
     except Exception as e:
@@ -227,8 +248,12 @@ async def upload_photo():
 @app.route('/api/react', methods=['GET'])
 @app.route('/react', methods=['GET'])
 async def react_message():
-    chat_id = int(request.args.get('chat_id'))
-    msg_id = int(request.args.get('msg_id'))
+    chat_id, err_resp, err_code = parse_int_arg('chat_id')
+    if err_resp:
+        return err_resp, err_code
+    msg_id, err_resp, err_code = parse_int_arg('msg_id')
+    if err_resp:
+        return err_resp, err_code
     emoji = request.args.get('emoji')
     c = await get_client()
     if not await c.is_user_authorized(): return jsonify({"status": "unauthorized"})
@@ -269,14 +294,19 @@ async def login():
         if phone in phone_code_hashes:
             try:
                 await c.sign_in(phone, code, phone_code_hash=phone_code_hashes[phone])
+                phone_code_hashes.pop(phone, None)
                 return jsonify({"status": "ok", "message": "Logged in"})
             except SessionPasswordNeededError:
                 if password:
                     await c.sign_in(password=password)
+                    phone_code_hashes.pop(phone, None)
                     return jsonify({"status": "ok", "message": "Logged in with 2FA"})
                 else: return jsonify({"status": "error", "message": "2FA_REQUIRED"})
-            except PhoneCodeInvalidError: return jsonify({"status": "error", "message": "INVALID_CODE"})
-            except PhoneCodeExpiredError: return jsonify({"status": "error", "message": "CODE_EXPIRED"})
+            except PhoneCodeInvalidError:
+                return jsonify({"status": "error", "message": "INVALID_CODE"})
+            except PhoneCodeExpiredError:
+                phone_code_hashes.pop(phone, None)
+                return jsonify({"status": "error", "message": "CODE_EXPIRED"})
         else:
             try:
                 await c.sign_in(phone, code)
