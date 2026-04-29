@@ -2,6 +2,7 @@
 import asyncio
 import io
 import os
+import re
 from quart import Quart, request, jsonify, send_file
 from telethon import TelegramClient, events
 from telethon.tl.types import PeerUser, PeerChat, PeerChannel, MessageMediaPhoto
@@ -79,6 +80,47 @@ async def add_header(response):
 @app.route('/')
 async def index():
     return "Server is RUNNING and REACHABLE (Quart)!"
+
+@app.route('/TelegramClient.jar', methods=['GET'])
+async def download_midlet_jar():
+    jar_path = os.path.join(os.path.dirname(__file__), '..', 'TelegramClient.jar')
+    jar_path = os.path.abspath(jar_path)
+    if not os.path.exists(jar_path):
+        return "JAR not found", 404
+    return await send_file(
+        jar_path,
+        mimetype='application/java-archive',
+        as_attachment=False
+    )
+
+@app.route('/TelegramClient.jad', methods=['GET'])
+async def download_midlet_jad():
+    server_dir = os.path.dirname(__file__)
+    jad_path = os.path.abspath(os.path.join(server_dir, '..', 'client', 'TelegramClient.jad'))
+    jar_path = os.path.abspath(os.path.join(server_dir, '..', 'TelegramClient.jar'))
+
+    if not os.path.exists(jad_path):
+        return "JAD not found", 404
+    if not os.path.exists(jar_path):
+        return "JAR not found", 404
+
+    with open(jad_path, 'r', encoding='utf-8') as f:
+        jad_text = f.read()
+
+    jar_size = os.path.getsize(jar_path)
+    jad_text = re.sub(
+        r'^MIDlet-Jar-Size:\s*\d+\s*$',
+        f'MIDlet-Jar-Size: {jar_size}',
+        jad_text,
+        flags=re.MULTILINE
+    )
+
+    if 'MIDlet-Jar-Size:' not in jad_text:
+        jad_text = jad_text.rstrip() + f"\nMIDlet-Jar-Size: {jar_size}\n"
+
+    response = await app.make_response(jad_text)
+    response.headers['Content-Type'] = 'text/vnd.sun.j2me.app-descriptor; charset=UTF-8'
+    return response
 
 @app.route('/api/chats', methods=['GET'])
 @app.route('/chats', methods=['GET'])
