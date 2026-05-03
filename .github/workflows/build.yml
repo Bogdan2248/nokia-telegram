@@ -55,10 +55,10 @@ jobs:
           exit 1 
         fi 
 
-    - name: Get ProGuard CLI (for CLDC preverify)
+    - name: Get ProGuard (for CLDC preverify)
       run: |
-        curl -L -f -o lib/proguard-cli.jar \
-          "https://repo1.maven.org/maven2/com/guardsquare/proguard-cli/7.4.2/proguard-cli-7.4.2.jar"
+        curl -L -f -o lib/proguard-base.jar \
+          "https://repo1.maven.org/maven2/com/guardsquare/proguard-base/7.4.2/proguard-base-7.4.2.jar"
   
     - name: Build 
       run: | 
@@ -86,7 +86,7 @@ jobs:
             public void destroyApp(boolean);
         }
         EOF
-        java -jar lib/proguard-cli.jar @proguard.pro
+        java -cp lib/proguard-base.jar proguard.ProGuard @proguard.pro
  
     - name: Package 
       run: | 
