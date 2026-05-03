@@ -59,6 +59,8 @@ jobs:
       run: |
         curl -L -f -o lib/proguard-base.jar \
           "https://repo1.maven.org/maven2/com/guardsquare/proguard-base/7.4.2/proguard-base-7.4.2.jar"
+        curl -L -f -o lib/proguard-core.jar \
+          "https://repo1.maven.org/maven2/com/guardsquare/proguard-core/9.1.1/proguard-core-9.1.1.jar"
   
     - name: Build 
       run: | 
@@ -86,7 +88,7 @@ jobs:
             public void destroyApp(boolean);
         }
         EOF
-        java -cp lib/proguard-base.jar proguard.ProGuard @proguard.pro
+        java -cp lib/proguard-base.jar:lib/proguard-core.jar proguard.ProGuard @proguard.pro
  
     - name: Package 
       run: | 
