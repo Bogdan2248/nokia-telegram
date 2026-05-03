@@ -54,6 +54,11 @@ jobs:
           echo "ERROR: Could not download J2ME libraries!" 
           exit 1 
         fi 
+
+    - name: Get ProGuard (for CLDC preverify)
+      run: |
+        curl -L -f -o lib/proguard-base.jar \
+          "https://repo1.maven.org/maven2/com/guardsquare/proguard-base/7.4.2/proguard-base-7.4.2.jar"
   
     - name: Build 
       run: | 
@@ -61,17 +66,38 @@ jobs:
         SOURCE_PATH=$(find . -name "TelegramClient.java" | head -n 1) 
         echo "Compiling $SOURCE_PATH..." 
         javac -source 1.3 -target 1.3 -encoding UTF-8 -bootclasspath lib/midpapi20.jar:lib/cldcapi11.jar -d classes "$SOURCE_PATH" 
-  
+
+    - name: Preverify Classes (CLDC)
+      run: |
+        cat > proguard.pro <<'EOF'
+        -injars classes
+        -outjars preverified
+        -libraryjars lib/midpapi20.jar
+        -libraryjars lib/cldcapi11.jar
+        -microedition
+        -dontoptimize
+        -dontobfuscate
+        -dontshrink
+        -dontwarn
+        -keep public class TelegramClient extends javax.microedition.midlet.MIDlet {
+            public <init>();
+            public void startApp();
+            public void pauseApp();
+            public void destroyApp(boolean);
+        }
+        EOF
+        java -jar lib/proguard-base.jar @proguard.pro
+ 
     - name: Package 
       run: | 
-        mkdir -p classes/META-INF 
-        echo "MIDlet-Name: Telegram" > classes/META-INF/MANIFEST.MF
-        echo "MIDlet-Version: 1.0.0" >> classes/META-INF/MANIFEST.MF
-        echo "MIDlet-Vendor: Bogdan2248" >> classes/META-INF/MANIFEST.MF
-        echo "MIDlet-1: Telegram, , TelegramClient" >> classes/META-INF/MANIFEST.MF
-        echo "MicroEdition-Profile: MIDP-2.0" >> classes/META-INF/MANIFEST.MF
-        echo "MicroEdition-Configuration: CLDC-1.1" >> classes/META-INF/MANIFEST.MF
-        cd classes
+        mkdir -p preverified/META-INF 
+        echo "MIDlet-Name: Telegram" > preverified/META-INF/MANIFEST.MF
+        echo "MIDlet-Version: 1.0.0" >> preverified/META-INF/MANIFEST.MF
+        echo "MIDlet-Vendor: Bogdan2248" >> preverified/META-INF/MANIFEST.MF
+        echo "MIDlet-1: Telegram, , TelegramClient" >> preverified/META-INF/MANIFEST.MF
+        echo "MicroEdition-Profile: MIDP-2.0" >> preverified/META-INF/MANIFEST.MF
+        echo "MicroEdition-Configuration: CLDC-1.1" >> preverified/META-INF/MANIFEST.MF
+        cd preverified
         jar cvfm ../TelegramClient.jar META-INF/MANIFEST.MF .
         cd ..
         if [ -f "TelegramClient.jar" ]; then
