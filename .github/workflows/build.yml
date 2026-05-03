@@ -61,6 +61,10 @@ jobs:
           "https://repo1.maven.org/maven2/com/guardsquare/proguard-base/7.4.2/proguard-base-7.4.2.jar"
         curl -L -f -o lib/proguard-core.jar \
           "https://repo1.maven.org/maven2/com/guardsquare/proguard-core/9.1.1/proguard-core-9.1.1.jar"
+        curl -L -f -o lib/log4j-api.jar \
+          "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-api/2.23.1/log4j-api-2.23.1.jar"
+        curl -L -f -o lib/log4j-core.jar \
+          "https://repo1.maven.org/maven2/org/apache/logging/log4j/log4j-core/2.23.1/log4j-core-2.23.1.jar"
   
     - name: Build 
       run: | 
@@ -88,7 +92,7 @@ jobs:
             public void destroyApp(boolean);
         }
         EOF
-        java -cp lib/proguard-base.jar:lib/proguard-core.jar proguard.ProGuard @proguard.pro
+        java -cp lib/proguard-base.jar:lib/proguard-core.jar:lib/log4j-api.jar:lib/log4j-core.jar proguard.ProGuard @proguard.pro
  
     - name: Package 
       run: | 
